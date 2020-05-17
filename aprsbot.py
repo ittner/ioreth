@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-class TcpKissHandler:
+class TcpKissClient:
     FEND = b"\xc0"
     FESC = b"\xdb"
     TFEND = b"\xdc"
@@ -89,15 +89,15 @@ class TcpKissHandler:
 
             while len(self._inbuf) > 3:
                 # FEND, FDATA, escaped_data, FEND, ...
-                if self._inbuf[0] != ord(TcpKissHandler.FEND):
+                if self._inbuf[0] != ord(TcpKissClient.FEND):
                     raise ValueError("Bad frame start")
-                lst = self._inbuf[2:].split(TcpKissHandler.FEND, 1)
+                lst = self._inbuf[2:].split(TcpKissClient.FEND, 1)
                 if len(lst) > 1:
                     self._inbuf = lst[1]
                     frame = (
                         lst[0]
-                        .replace(TcpKissHandler.FESC_TFEND, TcpKissHandler.FEND)
-                        .replace(TcpKissHandler.FESC_TFESC, TcpKissHandler.FESC)
+                        .replace(TcpKissClient.FESC_TFEND, TcpKissClient.FEND)
+                        .replace(TcpKissClient.FESC_TFESC, TcpKissClient.FESC)
                     )
                     self.on_recv(frame)
 
@@ -112,10 +112,10 @@ class TcpKissHandler:
     def write_frame(self, frame_bytes):
         """Send a complete frame."""
         esc_frame = frame_bytes.replace(
-            TcpKissHandler.FESC, TcpKissHandler.FESC_TFESC
-        ).replace(TcpKissHandler.FEND, TcpKissHandler.FESC_TFEND)
+            TcpKissClient.FESC, TcpKissClient.FESC_TFESC
+        ).replace(TcpKissClient.FEND, TcpKissClient.FESC_TFEND)
         self._outbuf += (
-            TcpKissHandler.FEND + TcpKissHandler.DATA + esc_frame + TcpKissHandler.FEND
+            TcpKissClient.FEND + TcpKissClient.DATA + esc_frame + TcpKissClient.FEND
         )
 
     def on_connect(self):
@@ -131,7 +131,7 @@ class TcpKissHandler:
         pass
 
 
-class KissPrint(TcpKissHandler):
+class KissPrint(TcpKissClient):
     def on_connect(self):
         logger.info("Connected!")
 
@@ -147,20 +147,20 @@ class KissPrint(TcpKissHandler):
         self.connect()
 
 
-class AprsBot(TcpKissHandler):
+class AprsClient(TcpKissClient):
     DEFAULT_PATH = ["WIDE1-1", "WIDE2-2"]
     DEFAULT_DESTINATION = "APRS"
 
     def __init__(self, callsign, host, port):
-        TcpKissHandler.__init__(self, host, port)
+        TcpKissClient.__init__(self, host, port)
         self.callsign = callsign
         self._snd_queue = []
         self._snd_queue_interval = 2
         self._snd_queue_last = time.monotonic()
         self._base_frame = ax25.Frame(
             ax25.Address.from_string(self.callsign),
-            ax25.Address.from_string(AprsBot.DEFAULT_DESTINATION),
-            [ax25.Address.from_string(s) for s in AprsBot.DEFAULT_PATH],
+            ax25.Address.from_string(AprsClient.DEFAULT_DESTINATION),
+            [ax25.Address.from_string(s) for s in AprsClient.DEFAULT_PATH],
             ax25.APRS_CONTROL_FLD,
             ax25.APRS_PROTOCOL_ID,
             b"",
@@ -206,11 +206,11 @@ def is_br_callsign(callsign):
     return bool(re.match("P[PTUY][0-9].+", callsign.upper()))
 
 
-class ReplyBot(AprsBot):
+class ReplyBot(AprsClient):
     CONFIG_FILE_NAME = "aprsbot.conf"
 
     def __init__(self, callsign, host, port):
-        AprsBot.__init__(self, callsign, host, port)
+        AprsClient.__init__(self, callsign, host, port)
         self._last_blns = time.monotonic()
         self._cfg = configparser.ConfigParser()
         self._config_mtime = None
@@ -351,7 +351,7 @@ class ReplyBot(AprsBot):
             self.send_aprs_msg(bln, text)
 
     def on_loop_hook(self):
-        AprsBot.on_loop_hook(self)
+        AprsClient.on_loop_hook(self)
         self._check_updated_config()
         self._update_bulletins()
 
