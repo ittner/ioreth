@@ -29,9 +29,9 @@ class TcpKissClient:
     FESC_TFESC = FESC + TFESC
     FESC_TFEND = FESC + TFEND
 
-    def __init__(self, addr, port):
-        self._addr = addr
-        self._port = port
+    def __init__(self, addr="localhost", port=8001):
+        self.addr = addr
+        self.port = port
         self._sock = None
         self._inbuf = None
         self._outbuf = None
@@ -43,7 +43,7 @@ class TcpKissClient:
         self._inbuf = bytearray()
         self._outbuf = bytearray()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.connect((self._addr, self._port))
+        self._sock.connect((self.addr, self.port))
         self.on_connect()
 
     def disconnect(self):
@@ -148,19 +148,24 @@ class KissPrint(TcpKissClient):
 
 
 class AprsClient(TcpKissClient):
-    DEFAULT_PATH = ["WIDE1-1", "WIDE2-2"]
+    DEFAULT_PATH = "WIDE1-1,WIDE2-2"
     DEFAULT_DESTINATION = "APRS"
 
-    def __init__(self, callsign, host, port):
+    def __init__(self, callsign="XX0ABC", host="localhost", port=8001):
         TcpKissClient.__init__(self, host, port)
         self.callsign = callsign
+        self.destination = AprsClient.DEFAULT_DESTINATION
+        self.path = AprsClient.DEFAULT_PATH
         self._snd_queue = []
         self._snd_queue_interval = 2
         self._snd_queue_last = time.monotonic()
+        self._update_props()
+
+    def _update_props(self):
         self._base_frame = ax25.Frame(
             ax25.Address.from_string(self.callsign),
-            ax25.Address.from_string(AprsClient.DEFAULT_DESTINATION),
-            [ax25.Address.from_string(s) for s in AprsClient.DEFAULT_PATH],
+            ax25.Address.from_string(self.destination),
+            [ax25.Address.from_string(s) for s in self.path.split(",")],
             ax25.APRS_CONTROL_FLD,
             ax25.APRS_PROTOCOL_ID,
             b"",
@@ -207,25 +212,29 @@ def is_br_callsign(callsign):
 
 
 class ReplyBot(AprsClient):
-    CONFIG_FILE_NAME = "aprsbot.conf"
-
-    def __init__(self, callsign, host, port):
-        AprsClient.__init__(self, callsign, host, port)
-        self._last_blns = time.monotonic()
-        self._cfg = configparser.ConfigParser()
+    def __init__(self, config_file):
+        AprsClient.__init__(self)
+        self._config_file = config_file
         self._config_mtime = None
+        self._cfg = configparser.ConfigParser()
         self._check_updated_config()
+        self._last_blns = time.monotonic()
 
     def _load_config(self):
         try:
             self._cfg.clear()
-            self._cfg.read(ReplyBot.CONFIG_FILE_NAME)
+            self._cfg.read(self._config_file)
+            self.addr = self._cfg["tnc"]["addr"]
+            self.port = int(self._cfg["tnc"]["port"])
+            self.callsign = self._cfg["aprs"]["callsign"]
+            self.path = self._cfg["aprs"]["path"]
+            self._update_props()
         except Exception as exc:
             logger.error(exc)
 
     def _check_updated_config(self):
         try:
-            mtime = os.stat(ReplyBot.CONFIG_FILE_NAME).st_mtime
+            mtime = os.stat(self._config_file).st_mtime
             if self._config_mtime != mtime:
                 self._load_config()
                 self._config_mtime = mtime
@@ -357,6 +366,9 @@ class ReplyBot(AprsClient):
 
 
 if __name__ == "__main__":
-    b = ReplyBot("XX0ABC-10", "192.168.100.40", 8001)
+    if len(sys.argv) != 2:
+        print("Usage: %s <config-file.conf>" % (sys.argv[0]))
+        exit(1)
+    b = ReplyBot(sys.argv[1])
     b.connect()
     b.loop()
