@@ -170,7 +170,7 @@ class Frame:
         if dlen < 19:
             raise ValueError(
                 "Frame length is smaller than expected minimum. frame data: "
-                + frame.hex()
+                + fdata.hex()
             )
 
         dest = Address.from_bytes(fdata[0:7])
