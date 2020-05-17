@@ -5,12 +5,10 @@ import configparser
 import os
 import re
 
-
-from .clients import AprsClient
-
-
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+
+from .clients import AprsClient
 
 
 def is_br_callsign(callsign):

@@ -3,13 +3,12 @@
 import sys
 import logging
 
-from ioreth.bot import ReplyBot
-
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)-15s %(levelname)s: %(funcName)s %(message)s"
 )
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+
+from ioreth.bot import ReplyBot
 
 
 if __name__ == "__main__":

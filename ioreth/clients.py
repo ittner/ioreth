@@ -3,10 +3,10 @@ import select
 import time
 import logging
 
-from . import ax25
-
 logging.basicConfig()
 logger = logging.getLogger(__name__)
+
+from . import ax25
 
 
 class TcpKissClient:
