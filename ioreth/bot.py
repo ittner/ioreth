@@ -54,56 +54,119 @@ class ReplyBot(AprsClient):
         self.connect()
 
     def on_recv_frame(self, frame):
-        if len(frame.info) == 0:
+        """Received an AX.25 frame. It *may* have an APRS packet.
+        """
+
+        if frame.info == b"":
             # No data.
             return
 
+        via = None
         source = frame.source.to_string()
-        data_str = frame.info.decode("utf-8", errors="replace")
+        payload = frame.info
 
-        if data_str[0] == ":":
-            # Got a direct APRS text message.
-            self.handle_aprs_msg(source, data_str)
+        if payload[0] == ord(b"}"):
+            # Got a third-party APRS packet, check the payload.
+            # PP5ITT-10>APDW15,PP5JRS-15*,WIDE2-1:}PP5ITT-7>APDR15,TCPIP,PP5ITT-10*::PP5ITT-10:ping 00:01{17
 
-        elif data_str[0] == "}":
-            # Got a third-party message, check the payload.
-            # DEBUG RECV: PP5ITT-10>APDW15,PP5JRS-15*,WIDE2-1:}PP5ITT-7>APDR15,TCPIP,PP5ITT-10*::PP5ITT-10:ping 00:01{17
+            # This is tricky: according to the APRS Protocol Reference 1.0.1,
+            # chapter 17, the path may be both in TNC-2 encoding or in AEA
+            # encoding. So these both are valid:
+            #
+            # S0URCE>DE5T,PA0TH,PA1TH:payload
+            # S0URCE>PA0TH>PA1TH>DE5T:payload
+            #
+            # We are only using the source and payload for now so no worries,
+            # but another parser will be needed if we want the path.
+            #
+            # Of course, I never saw one of these EAE paths in the wild.
+
             via = source
-            src_rest = data_str[1:].split(">", 1)
+            src_rest = frame.info[1:].split(b">", 1)
             if len(src_rest) != 2:
-                # Unexpected format, nothing useful.
+                logger.debug(
+                    "Discarding third party packet with no destination. %s",
+                    frame.to_aprs_string().decode("utf-8", errors="replace"),
+                )
                 return
-            source = src_rest[0]
-            path_msg = src_rest[1].split(":", 1)
-            if len(path_msg) != 2:
-                # No payload.
+
+            # Source address should be a valid callsign+SSID.
+            source = src_rest[0].decode("utf-8", errors="replace")
+            destpath_payload = src_rest[1].split(b":", 1)
+
+            if len(destpath_payload) != 2:
+                logger.debug(
+                    "Discarding third party packet with no payload. %s",
+                    frame.to_aprs_string().decode("utf-8", errors="replace"),
+                )
                 return
-            inner_msg = path_msg[1]
-            if len(inner_msg) > 1 and inner_msg[0] == ":":
-                logger.info("Got a third-party message via %s..." % via)
-                self.handle_aprs_msg(source, inner_msg)
+
+            payload = destpath_payload[1]
+
+        self.handle_aprs_packet(frame, source, payload, via)
+
+    def handle_aprs_packet(self, origframe, source, payload, via=None):
+        """Got an APRS packet, possibly through a third-party forward.
+
+        origframe: the original ax25.Frame
+        source: the sender's callsign as a string.
+        payload: the APRS data as bytes.
+        via: None is not a third party packet; otherwise is the callsign of the
+             forwarder (as a string).
+        """
+
+        if payload[0] == ord(b":"):
+            # APRS data type == ":". We got an message (directed, bulletin,
+            # announce ... with or without confirmation request, or maybe
+            # just trash. We will need to look inside to know.
+            self.handle_aprs_msg(source, payload.decode("utf-8", errors="replace"))
+
+        # Add support to other data types here.
 
     def handle_aprs_msg(self, source, data_str):
+        """Handle an APRS message.
 
-        dest_txt = data_str[1:].split(":", 1)
-        if len(dest_txt) != 2:
-            # Should be a destination station : message
+        This may be a directed message, a bulletin, announce ... with or
+        without confirmation request, or maybe just trash. We will need to
+        look inside to know.
+        """
+
+        addressee_text = data_str[1:].split(":", 1)
+        if len(addressee_text) != 2:
+            # Should be a destinatio_station : message
             return
 
-        msg_sent_to = dest_txt[0].strip()
-        if msg_sent_to.upper() != self.callsign.upper():
+        addressee = addressee_text[0].strip()
+        if addressee.upper() != self.callsign.upper():
             # This message was not sent for us.
             return
 
-        text_msgid = dest_txt[1].rsplit("{", 1)
+        text_msgid = addressee_text[1].rsplit("{", 1)
         text = text_msgid[0]
+        msgid = None
         if len(text_msgid) == 2:
             # This message is asking for an ack.
             msgid = text_msgid[1]
-        else:
-            msgid = None
 
         logger.info("Message from %s: %s", source, text)
+        self.handle_aprs_msg_bot_query(source, text)
+
+        if msgid:
+            # APRS Protocol Reference 1.0.1 chapter 14 (page 72) says we can
+            # reject a message by sending a rejXXXXX instead of an ackXXXXX
+            # "If a station is unable to accept a message". Not sure if it is
+            # semantically correct to use this for an invalid query for a bot,
+            # so always acks.
+            logger.info("Sending ack to message %s from %s.", msgid, source)
+            self.send_aprs_msg(source, "ack" + msgid)
+
+    def handle_aprs_msg_bot_query(self, source, text):
+        """We got an text message direct to us. Handle it as a bot query.
+        TODO: Make this a generic thing.
+
+        source: the sender's callsign+SSID
+        text: message text.
+        """
 
         qry_args = text.lstrip().split(" ", 1)
         qry = qry_args[0].lower()
@@ -128,10 +191,6 @@ class ReplyBot(AprsClient):
                 )
             else:
                 self.send_aprs_msg(source, "I'm a bot. Send 'help' for command list")
-
-        if msgid:
-            logger.info("Sending ack...")
-            self.send_aprs_msg(source, "ack" + msgid)
 
     def send_aprs_msg(self, to_call, text):
         data = ":" + to_call.ljust(9, " ") + ":" + text
