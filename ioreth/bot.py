@@ -174,6 +174,15 @@ class ReplyBot(AprsClient):
         if len(qry_args) == 2:
             args = qry_args[1]
 
+        random_replies = {
+            "moria": "Pedo mellon a minno",
+            "mellon": "*door opens*",
+            "mellon!": "**door opens**  🚶🚶🚶🚶🚶🚶🚶🚶🚶  💍→🌋",
+            "meow": "=^.^=  purr purr  =^.^=",
+            "clacks": "GNU Terry Pratchett",
+            "73": "73 🖖",
+        }
+
         if qry == "ping":
             self.send_aprs_msg(source, "Pong! " + args)
         elif qry == "version":
@@ -184,6 +193,8 @@ class ReplyBot(AprsClient):
             )
         elif qry == "help":
             self.send_aprs_msg(source, "Valid commands: ping, version, time, help")
+        elif qry in random_replies:
+            self.send_aprs_msg(source, random_replies[qry])
         else:
             if is_br_callsign(source):
                 self.send_aprs_msg(
