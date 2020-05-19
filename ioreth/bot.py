@@ -53,77 +53,7 @@ class ReplyBot(AprsClient):
         logger.warning("Disconnected! Connecting again...")
         self.connect()
 
-    def on_recv_frame(self, frame):
-        """Received an AX.25 frame. It *may* have an APRS packet.
-        """
-
-        if frame.info == b"":
-            # No data.
-            return
-
-        via = None
-        source = frame.source.to_string()
-        payload = frame.info
-
-        if payload[0] == ord(b"}"):
-            # Got a third-party APRS packet, check the payload.
-            # PP5ITT-10>APDW15,PP5JRS-15*,WIDE2-1:}PP5ITT-7>APDR15,TCPIP,PP5ITT-10*::PP5ITT-10:ping 00:01{17
-
-            # This is tricky: according to the APRS Protocol Reference 1.0.1,
-            # chapter 17, the path may be both in TNC-2 encoding or in AEA
-            # encoding. So these both are valid:
-            #
-            # S0URCE>DE5T,PA0TH,PA1TH:payload
-            # S0URCE>PA0TH>PA1TH>DE5T:payload
-            #
-            # We are only using the source and payload for now so no worries,
-            # but another parser will be needed if we want the path.
-            #
-            # Of course, I never saw one of these EAE paths in the wild.
-
-            via = source
-            src_rest = frame.info[1:].split(b">", 1)
-            if len(src_rest) != 2:
-                logger.debug(
-                    "Discarding third party packet with no destination. %s",
-                    frame.to_aprs_string().decode("utf-8", errors="replace"),
-                )
-                return
-
-            # Source address should be a valid callsign+SSID.
-            source = src_rest[0].decode("utf-8", errors="replace")
-            destpath_payload = src_rest[1].split(b":", 1)
-
-            if len(destpath_payload) != 2:
-                logger.debug(
-                    "Discarding third party packet with no payload. %s",
-                    frame.to_aprs_string().decode("utf-8", errors="replace"),
-                )
-                return
-
-            payload = destpath_payload[1]
-
-        self.handle_aprs_packet(frame, source, payload, via)
-
-    def handle_aprs_packet(self, origframe, source, payload, via=None):
-        """Got an APRS packet, possibly through a third-party forward.
-
-        origframe: the original ax25.Frame
-        source: the sender's callsign as a string.
-        payload: the APRS data as bytes.
-        via: None is not a third party packet; otherwise is the callsign of the
-             forwarder (as a string).
-        """
-
-        if payload[0] == ord(b":"):
-            # APRS data type == ":". We got an message (directed, bulletin,
-            # announce ... with or without confirmation request, or maybe
-            # just trash. We will need to look inside to know.
-            self.handle_aprs_msg(source, payload.decode("utf-8", errors="replace"))
-
-        # Add support to other data types here.
-
-    def handle_aprs_msg(self, source, data_str):
+    def on_aprs_message(self, origframe, source, payload, via=None):
         """Handle an APRS message.
 
         This may be a directed message, a bulletin, announce ... with or
@@ -131,6 +61,7 @@ class ReplyBot(AprsClient):
         look inside to know.
         """
 
+        data_str = payload.decode("utf-8", errors="replace")
         addressee_text = data_str[1:].split(":", 1)
         if len(addressee_text) != 2:
             # Should be a destinatio_station : message
