@@ -9,51 +9,19 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 from .clients import AprsClient
+from . import aprs
 
 
 def is_br_callsign(callsign):
     return bool(re.match("P[PTUY][0-9].+", callsign.upper()))
 
 
-class ReplyBot(AprsClient):
-    def __init__(self, config_file):
-        AprsClient.__init__(self)
-        self._config_file = config_file
-        self._config_mtime = None
-        self._cfg = configparser.ConfigParser()
-        self._check_updated_config()
-        self._last_blns = time.monotonic()
+class BotAprsHandler(aprs.Handler):
+    def __init__(self, callsign, client):
+        aprs.Handler.__init__(self, callsign)
+        self._client = client
 
-    def _load_config(self):
-        try:
-            self._cfg.clear()
-            self._cfg.read(self._config_file)
-            self.addr = self._cfg["tnc"]["addr"]
-            self.port = int(self._cfg["tnc"]["port"])
-            self.callsign = self._cfg["aprs"]["callsign"]
-            self.path = self._cfg["aprs"]["path"]
-            self._update_props()
-        except Exception as exc:
-            logger.error(exc)
-
-    def _check_updated_config(self):
-        try:
-            mtime = os.stat(self._config_file).st_mtime
-            if self._config_mtime != mtime:
-                self._load_config()
-                self._config_mtime = mtime
-                logger.info("Configuration reloaded")
-        except Exception as exc:
-            logger.error(exc)
-
-    def on_connect(self):
-        logger.info("Connected")
-
-    def on_disconnect(self):
-        logger.warning("Disconnected! Connecting again...")
-        self.connect()
-
-    def on_aprs_message(self, origframe, source, payload, via=None):
+    def on_aprs_message(self, source, addressee, text, msgid=None, via=None):
         """Handle an APRS message.
 
         This may be a directed message, a bulletin, announce ... with or
@@ -61,27 +29,11 @@ class ReplyBot(AprsClient):
         look inside to know.
         """
 
-        data_str = payload.decode("utf-8", errors="replace")
-        addressee_text = data_str[1:].split(":", 1)
-        if len(addressee_text) != 2:
-            # Should be a destinatio_station : message
-            return
-
-        addressee = addressee_text[0].strip()
-        if addressee.upper() != self.callsign.upper():
+        if addressee.strip().upper() != self.callsign.upper():
             # This message was not sent for us.
             return
 
-        text_msgid = addressee_text[1].rsplit("{", 1)
-        text = text_msgid[0]
-        msgid = None
-        if len(text_msgid) == 2:
-            # This message is asking for an ack.
-            msgid = text_msgid[1]
-
-        logger.info("Message from %s: %s", source, text)
         self.handle_aprs_msg_bot_query(source, text)
-
         if msgid:
             # APRS Protocol Reference 1.0.1 chapter 14 (page 72) says we can
             # reject a message by sending a rejXXXXX instead of an ackXXXXX
@@ -135,8 +87,49 @@ class ReplyBot(AprsClient):
                 self.send_aprs_msg(source, "I'm a bot. Send 'help' for command list")
 
     def send_aprs_msg(self, to_call, text):
-        data = ":" + to_call.ljust(9, " ") + ":" + text
-        self.enqueue_aprs_data(data.encode("utf-8"))
+        self._client.enqueue_frame(self.make_aprs_msg(to_call, text))
+
+
+class ReplyBot(AprsClient):
+    def __init__(self, config_file):
+        AprsClient.__init__(self)
+        self._aprs = BotAprsHandler("", self)
+        self._config_file = config_file
+        self._config_mtime = None
+        self._cfg = configparser.ConfigParser()
+        self._check_updated_config()
+        self._last_blns = time.monotonic()
+
+    def _load_config(self):
+        try:
+            self._cfg.clear()
+            self._cfg.read(self._config_file)
+            self.addr = self._cfg["tnc"]["addr"]
+            self.port = int(self._cfg["tnc"]["port"])
+            self._aprs.callsign = self._cfg["aprs"]["callsign"]
+            self._aprs.path = self._cfg["aprs"]["path"]
+        except Exception as exc:
+            logger.error(exc)
+
+    def _check_updated_config(self):
+        try:
+            mtime = os.stat(self._config_file).st_mtime
+            if self._config_mtime != mtime:
+                self._load_config()
+                self._config_mtime = mtime
+                logger.info("Configuration reloaded")
+        except Exception as exc:
+            logger.error(exc)
+
+    def on_connect(self):
+        logger.info("Connected")
+
+    def on_disconnect(self):
+        logger.warning("Disconnected! Connecting again...")
+        self.connect()
+
+    def on_recv_frame(self, frame):
+        self._aprs.handle_frame(frame)
 
     def _update_bulletins(self):
         if not self._cfg.has_section("bulletins"):
@@ -162,7 +155,7 @@ class ReplyBot(AprsClient):
 
         # TODO: any post-processing here?
         for (bln, text) in blns_to_send:
-            self.send_aprs_msg(bln, text)
+            self._aprs.send_aprs_msg(bln, text)
 
     def on_loop_hook(self):
         AprsClient.on_loop_hook(self)
