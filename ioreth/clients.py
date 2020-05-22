@@ -126,6 +126,7 @@ class AprsClient(TcpKissClient):
         self._snd_queue = []
         self._snd_queue_interval = 2
         self._snd_queue_last = time.monotonic()
+        self._frame_cnt = 0
 
     def send_frame_bytes(self, frame_bytes):
         try:
@@ -146,11 +147,13 @@ class AprsClient(TcpKissClient):
         pass
 
     def enqueue_frame(self, frame):
+        logger.debug("AX.25 frame %d: %s", self._frame_cnt, frame.to_aprs_string())
         self.enqueue_frame_bytes(frame.to_kiss_bytes())
 
     def enqueue_frame_bytes(self, data_bytes):
-        logger.debug("AX.25 frame enqueued for sending")
-        self._snd_queue.append(data_bytes)
+        logger.debug("AX.25 frame %d enqueued for sending", self._frame_cnt)
+        self._snd_queue.append((self._frame_cnt, data_bytes))
+        self._frame_cnt += 1
 
     def _dequeue_frame_bytes(self):
         now = time.monotonic()
@@ -158,8 +161,9 @@ class AprsClient(TcpKissClient):
             return
         self._snd_queue_last = now
         if len(self._snd_queue) > 0:
-            logger.debug("Sending queued AX.25 frame")
-            self.send_frame_bytes(self._snd_queue.pop(0))
+            num, frame_bytes = self._snd_queue.pop(0)
+            logger.debug("Sending queued AX.25 frame %d", num)
+            self.send_frame_bytes(frame_bytes)
 
     def on_loop_hook(self):
         self._dequeue_frame_bytes()
