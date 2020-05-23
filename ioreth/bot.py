@@ -22,6 +22,10 @@ import logging
 import configparser
 import os
 import re
+import subprocess
+import multiprocessing as mp
+import queue
+
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -108,6 +112,80 @@ class BotAprsHandler(aprs.Handler):
         self._client.enqueue_frame(self.make_aprs_msg(to_call, text))
 
 
+class BaseRemoteCommand:
+    """A 'remote command' to be ran in the helper process.
+    """
+
+    def __init__(self, token):
+        self.token = token
+
+    def run(self):
+        """Run the command. Should be redefined by the actual command.
+        """
+        pass
+
+
+class RemoteCommandHandler:
+    """Run "commands" in an external process using the multiprocessing
+    module. When finished they are returned to the calling process in a
+    return queue.
+
+    Overhead here is enormous. The idea is only use this for things that
+    demand information from external sources or thar should be isolated
+    from the main process.
+    """
+
+    def __init__(self):
+        self._ctx = mp.get_context("spawn")
+        self._in_queue = self._ctx.Queue()
+        self._out_queue = self._ctx.Queue()
+        self._proc = None
+
+    def _start_proc(self):
+        if not self._proc:
+            self._proc = self._ctx.Process(
+                target=RemoteCommandHandler._remote_loop,
+                args=(self._in_queue, self._out_queue),
+            )
+            self._proc.start()
+
+    def _stop_proc(self):
+        if self._proc:
+            self.post_cmd("quit")
+            self._proc.join()
+            self._proc = None
+
+    def post_cmd(self, cmd):
+        """Post a new command to be ran in the helper process.
+        """
+        if not self._proc:
+            self._start_proc()
+        self._in_queue.put(cmd)
+
+    def poll_ret(self):
+        """Check if there finished command in the remote process.
+        Return: ran command or None
+        """
+        ret = None
+        try:
+            ret = self._out_queue.get(False)
+        except queue.Empty:
+            pass
+        return ret
+
+    @staticmethod
+    def _remote_loop(in_queue, out_queue):
+        """Executes commands in an external processes
+        """
+        while True:
+            cmd = in_queue.get(True)
+            if cmd == "quit":
+                break
+            elif isinstance(cmd, BaseRemoteCommand):
+                cmd.run()
+                out_queue.put(cmd)
+
+
 class ReplyBot(AprsClient):
     def __init__(self, config_file):
         AprsClient.__init__(self)
@@ -117,6 +195,7 @@ class ReplyBot(AprsClient):
         self._cfg = configparser.ConfigParser()
         self._check_updated_config()
         self._last_blns = time.monotonic()
+        self._rem = RemoteCommandHandler()
 
     def _load_config(self):
         try:
@@ -179,3 +258,13 @@ class ReplyBot(AprsClient):
         AprsClient.on_loop_hook(self)
         self._check_updated_config()
         self._update_bulletins()
+
+        # Poll results from external commands, if any.
+        while True:
+            rcmd = self._rem.poll_ret()
+            if not rcmd:
+                break
+            self.on_remote_command_result(rcmd)
+
+    def on_remote_command_result(self, cmd):
+        logger.debug("ret = %s", cmd)
