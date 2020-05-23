@@ -55,6 +55,11 @@ class Handler:
         addr_msg = ":" + to_call.ljust(9, " ") + ":" + text
         return self.make_frame(addr_msg.encode("utf-8"))
 
+    def make_aprs_status(self, status):
+        """Make an APRS status packet.
+        """
+        return self.make_frame((">" + status).encode("utf-8"))
+
     def handle_frame(self, frame):
         """ Handle an AX.25 frame and looks for APRS data packets.
         """
