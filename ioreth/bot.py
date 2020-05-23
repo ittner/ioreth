@@ -23,8 +23,6 @@ import configparser
 import os
 import re
 import subprocess
-import multiprocessing as mp
-import queue
 
 
 logging.basicConfig()
@@ -32,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 from .clients import AprsClient
 from . import aprs
+from . import remotecmd
 
 
 def is_br_callsign(callsign):
@@ -115,19 +114,6 @@ class BotAprsHandler(aprs.Handler):
         self._client.enqueue_frame(self.make_aprs_status(status))
 
 
-class BaseRemoteCommand:
-    """A 'remote command' to be ran in the helper process.
-    """
-
-    def __init__(self, token):
-        self.token = token
-
-    def run(self):
-        """Run the command. Should be redefined by the actual command.
-        """
-        pass
-
-
 def _simple_ping(host, timeout=15):
     """Check if a host is alive by sending a few pings.
     Return True if alive, False otherwise.
@@ -175,22 +161,9 @@ def _get_uptime():
     return ret_time
 
 
-class IsHostAliveCommand(BaseRemoteCommand):
-    def __init__(self, token, host):
-        BaseRemoteCommand.__init__(self, token)
-        self.host = host
-        self.alive = None
-
-    def run(self):
-        self.alive = _simple_ping(self.host)
-
-    def __str__(self):
-        return "<%s> %s: %s" % (self.token, self.host, self.alive)
-
-
-class SystemStatusCommand(BaseRemoteCommand):
+class SystemStatusCommand(remotecmd.BaseRemoteCommand):
     def __init__(self, cfg):
-        BaseRemoteCommand.__init__(self, "system-status")
+        remotecmd.BaseRemoteCommand.__init__(self, "system-status")
         self._cfg = cfg
         self.status_str = ""
 
@@ -217,67 +190,6 @@ class SystemStatusCommand(BaseRemoteCommand):
         return " " + name + ":Err"
 
 
-class RemoteCommandHandler:
-    """Run "commands" in an external process using the multiprocessing
-    module. When finished they are returned to the calling process in a
-    return queue.
-
-    Overhead here is enormous. The idea is only use this for things that
-    demand information from external sources or thar should be isolated
-    from the main process.
-    """
-
-    def __init__(self):
-        self._ctx = mp.get_context("spawn")
-        self._in_queue = self._ctx.Queue()
-        self._out_queue = self._ctx.Queue()
-        self._proc = None
-
-    def _start_proc(self):
-        if not self._proc:
-            self._proc = self._ctx.Process(
-                target=RemoteCommandHandler._remote_loop,
-                args=(self._in_queue, self._out_queue),
-            )
-            self._proc.start()
-
-    def _stop_proc(self):
-        if self._proc:
-            self.post_cmd("quit")
-            self._proc.join()
-            self._proc = None
-
-    def post_cmd(self, cmd):
-        """Post a new command to be ran in the helper process.
-        """
-        if not self._proc:
-            self._start_proc()
-        self._in_queue.put(cmd)
-
-    def poll_ret(self):
-        """Check if there finished command in the remote process.
-        Return: ran command or None
-        """
-        ret = None
-        try:
-            ret = self._out_queue.get(False)
-        except queue.Empty:
-            pass
-        return ret
-
-    @staticmethod
-    def _remote_loop(in_queue, out_queue):
-        """Executes commands in an external processes
-        """
-        while True:
-            cmd = in_queue.get(True)
-            if cmd == "quit":
-                break
-            elif isinstance(cmd, BaseRemoteCommand):
-                cmd.run()
-                out_queue.put(cmd)
-
-
 class ReplyBot(AprsClient):
     def __init__(self, config_file):
         AprsClient.__init__(self)
@@ -288,7 +200,7 @@ class ReplyBot(AprsClient):
         self._check_updated_config()
         self._last_blns = time.monotonic()
         self._last_status = time.monotonic()
-        self._rem = RemoteCommandHandler()
+        self._rem = remotecmd.RemoteCommandHandler()
 
     def _load_config(self):
         try:
