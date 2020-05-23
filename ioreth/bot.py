@@ -22,8 +22,6 @@ import logging
 import configparser
 import os
 import re
-import subprocess
-
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -31,6 +29,7 @@ logger = logging.getLogger(__name__)
 from .clients import AprsClient
 from . import aprs
 from . import remotecmd
+from . import utils
 
 
 def is_br_callsign(callsign):
@@ -114,53 +113,6 @@ class BotAprsHandler(aprs.Handler):
         self._client.enqueue_frame(self.make_aprs_status(status))
 
 
-def _simple_ping(host, timeout=15):
-    """Check if a host is alive by sending a few pings.
-    Return True if alive, False otherwise.
-    """
-
-    rcode = False
-    cmdline = ["ping", "-c", "4", "-W", "3", host]
-    proc = subprocess.Popen(cmdline)
-    try:
-        proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        proc.kill()
-        logger.exception(exc)
-    else:
-        rcode = proc.returncode == 0
-    return rcode
-
-
-def _human_time_interval(secs):
-
-    nsecs = secs
-    ndays = int(secs / (24 * 60 * 60))
-    nsecs -= ndays * 24 * 60 * 60
-    nhours = int(nsecs / (60 * 60))
-    nsecs -= nhours * 60 * 60
-    nmins = int(nsecs / 60)
-    nsecs -= nmins * 60
-
-    if ndays > 0:
-        return "%dd %02dh%02dm" % (ndays, nhours, nmins)
-
-    return "%02dh%02dm%02ds" % (nhours, nmins, nsecs)
-
-
-def _get_uptime():
-    with open("/proc/uptime") as fp:
-        rdata = fp.read()
-
-    ret_time = None
-    if rdata:
-        lst = rdata.strip().split()
-        if len(lst) > 1:
-            ret_time = int(float(lst[0]))
-
-    return ret_time
-
-
 class SystemStatusCommand(remotecmd.BaseRemoteCommand):
     def __init__(self, cfg):
         remotecmd.BaseRemoteCommand.__init__(self, "system-status")
@@ -176,7 +128,7 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
         )
         self.status_str = "At %s: Uptime %s" % (
             time.strftime("%Y-%m-%d %H:%M:%S UTC%Z"),
-            _human_time_interval(_get_uptime()),
+            utils.human_time_interval(utils.get_uptime()),
         )
         if len(net_status) > 0:
             self.status_str += "," + net_status
@@ -184,7 +136,7 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
     def _check_host_scope(self, name, cfg_key):
         if not cfg_key in self._cfg:
             return ""
-        ret = _simple_ping(self._cfg[cfg_key])
+        ret = utils.simple_ping(self._cfg[cfg_key])
         if ret:
             return " " + name + ":Ok"
         return " " + name + ":Err"
