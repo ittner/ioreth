@@ -22,6 +22,7 @@ import logging
 import configparser
 import os
 import re
+import random
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -194,11 +195,22 @@ class ReplyBot(AprsClient):
             return
 
         max_age = self._cfg.getint("bulletins", "send_freq", fallback=600)
+
+        # There are two different time bases here: simple bulletins are based
+        # on intervals, so we can use monotonic timers to prevent any crazy
+        # behavior if the clock is adjusted and start them at arbitrary moments
+        # so we don't need to worry about transmissions being concentrated at
+        # some magic moments. Rule-based blns are based on wall-clock time, so
+        # we must ensure they are checked exactly once a minute, behaves
+        # correctly when the clock is adjusted, and distribute the transmission
+        # times to prevent packet storms at the start of minute.
+
         now_mono = time.monotonic()
+        now_time = time.time()
 
         # Optimization: return ASAP if nothing to do.
-        if (now_mono < (self._last_blns + max_age)) and (
-            now_mono < (self._last_cron_blns + 60)
+        if (now_mono <= (self._last_blns + max_age)) and (
+            now_time <= (self._last_cron_blns + 60)
         ):
             return
 
@@ -210,8 +222,11 @@ class ReplyBot(AprsClient):
         std_blns = [k for k in keys if k.startswith("BLN") and len(k) == 4]
 
         # Map all matching rule-based bulletins.
-        if now_mono >= (self._last_cron_blns + 60):
-            self._last_cron_blns = now_mono
+        if now_time > (self._last_cron_blns + 60):
+            # Randomize the delay until next check to prevent packet storms
+            # in the first seconds following a minute. It will, of course,
+            # still run within the minute.
+            self._last_cron_blns = 60 * int(now_time / 60.0) + random.randint(0, 30)
 
             cur_time = time.localtime()
             utc_offset = cur_time.tm_gmtoff / 3600  # UTC offset in hours
@@ -230,7 +245,7 @@ class ReplyBot(AprsClient):
                         bln_map[k[0:4]] = expr.comment
 
         # If we need to send standard bulletins now, copy them to the map.
-        if now_mono >= (self._last_blns + max_age):
+        if now_mono > (self._last_blns + max_age):
             self._last_blns = now_mono
             for k in std_blns:
                 bln_map[k] = self._cfg.get("bulletins", k)
