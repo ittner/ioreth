@@ -26,6 +26,8 @@ import re
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
+from cronex import CronExpression
+
 from .clients import AprsClient
 from . import aprs
 from . import remotecmd
@@ -149,8 +151,10 @@ class ReplyBot(AprsClient):
         self._config_file = config_file
         self._config_mtime = None
         self._cfg = configparser.ConfigParser()
+        self._cfg.optionxform = str  # config is case-sensitive
         self._check_updated_config()
         self._last_blns = time.monotonic()
+        self._last_cron_blns = 0
         self._last_status = time.monotonic()
         self._rem = remotecmd.RemoteCommandHandler()
 
@@ -191,25 +195,52 @@ class ReplyBot(AprsClient):
 
         max_age = self._cfg.getint("bulletins", "send_freq", fallback=600)
         now_mono = time.monotonic()
-        if now_mono < (self._last_blns + max_age):
+
+        # Optimization: return ASAP if nothing to do.
+        if (now_mono < (self._last_blns + max_age)) and (
+            now_mono < (self._last_cron_blns + 60)
+        ):
             return
 
-        self._last_blns = now_mono
-        logger.info("Bulletins are due for update (every %s seconds)", max_age)
+        bln_map = dict()
 
-        # Bulletins have names in format BLNx, we should send them in
-        # alfabetical order.
-        blns_to_send = []
+        # Find all standard (non rule-based) bulletins.
         keys = self._cfg.options("bulletins")
         keys.sort()
-        for key in keys:
-            bname = key.upper()
-            if len(bname) == 4 and bname.startswith("BLN"):
-                blns_to_send.append((bname, self._cfg.get("bulletins", key)))
+        std_blns = [k for k in keys if k.startswith("BLN") and len(k) == 4]
 
-        # TODO: any post-processing here?
-        for (bln, text) in blns_to_send:
-            self._aprs.send_aprs_msg(bln, text)
+        # Map all matching rule-based bulletins.
+        if now_mono >= (self._last_cron_blns + 60):
+            self._last_cron_blns = now_mono
+
+            cur_time = time.localtime()
+            utc_offset = cur_time.tm_gmtoff / 3600  # UTC offset in hours
+            ref_time = cur_time[:5]  # (Y, M, D, hour, min)
+
+            for k in keys:
+                # if key is "BLNx_rule_x", etc.
+                if (
+                    (len(k) > 10)
+                    and (k[0:3] == "BLN")
+                    and (k[4:10] == "_rule_")
+                    and (k[0:4] not in std_blns)
+                ):
+                    expr = CronExpression(self._cfg.get("bulletins", k))
+                    if expr.check_trigger(ref_time, utc_offset):
+                        bln_map[k[0:4]] = expr.comment
+
+        # If we need to send standard bulletins now, copy them to the map.
+        if now_mono >= (self._last_blns + max_age):
+            self._last_blns = now_mono
+            for k in std_blns:
+                bln_map[k] = self._cfg.get("bulletins", k)
+
+        if len(bln_map) > 0:
+            to_send = [(k, v) for k, v in bln_map.items()]
+            to_send.sort()
+            for (bln, text) in to_send:
+                logger.info("Posting bulletin: %s=%s", bln, text)
+                self._aprs.send_aprs_msg(bln, text)
 
     def _update_status(self):
         if not self._cfg.has_section("status"):
