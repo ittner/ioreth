@@ -221,8 +221,12 @@ class ReplyBot(AprsClient):
         keys.sort()
         std_blns = [k for k in keys if k.startswith("BLN") and len(k) == 4]
 
+        # Do not run if time was not set yet (e.g. Raspberry Pis getting their
+        # time from NTP but before conecting to the network)
+        time_was_set = time.gmtime().tm_year > 2000
+
         # Map all matching rule-based bulletins.
-        if now_time > (self._last_cron_blns + 60):
+        if time_was_set and now_time > (self._last_cron_blns + 60):
             # Randomize the delay until next check to prevent packet storms
             # in the first seconds following a minute. It will, of course,
             # still run within the minute.
