@@ -60,31 +60,35 @@ class TcpKissClient:
             self._inbuf = None
             self._outbuf = None
             self.on_disconnect()
-        self.exit_loop()
+
+    def is_connected(self):
+        return bool(self._sock)
 
     def loop(self):
-
         poller = select.poll()
-        fd = self._sock.fileno()
         self._run = True
-        disconnected = False
 
         while self._run:
-            flags = select.POLLIN | select.POLLHUP | select.POLLERR
-            if len(self._outbuf) > 0:
-                flags |= select.POLLOUT
-            poller.register(fd, flags)
+            will_disconnect = False
+            fd = -1
+            if self.is_connected():
+                fd = self._sock.fileno()
+                flags = select.POLLIN | select.POLLHUP | select.POLLERR
+                if len(self._outbuf) > 0:
+                    flags |= select.POLLOUT
+                poller.register(fd, flags)
+
             events = poller.poll(1000)
 
             # There is only one :/
             for _, evt in events:
                 if evt & (select.POLLHUP | select.POLLERR):
-                    disconnected = True
+                    will_disconnect = True
 
                 if evt & select.POLLIN:
                     rdata = self._sock.recv(2048)
                     if len(rdata) == 0:
-                        disconnected = True
+                        will_disconnect = True
                     else:
                         self._inbuf += rdata
 
@@ -92,7 +96,8 @@ class TcpKissClient:
                     nsent = self._sock.send(self._outbuf)
                     self._outbuf = self._outbuf[nsent:]
 
-            poller.unregister(fd)
+            if fd >= 0:
+                poller.unregister(fd)
 
             while len(self._inbuf) > 3:
                 # FEND, FDATA, escaped_data, FEND, ...
@@ -110,7 +115,7 @@ class TcpKissClient:
 
             self.on_loop_hook()
 
-            if disconnected:
+            if will_disconnect:
                 self.disconnect()
 
     def exit_loop(self):
@@ -118,6 +123,8 @@ class TcpKissClient:
 
     def write_frame(self, frame_bytes):
         """Send a complete frame."""
+        if not self.is_connected():
+            return
         esc_frame = frame_bytes.replace(
             TcpKissClient.FESC, TcpKissClient.FESC_TFESC
         ).replace(TcpKissClient.FEND, TcpKissClient.FESC_TFEND)
