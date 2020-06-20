@@ -136,13 +136,11 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
         if len(net_status) > 0:
             self.status_str += "," + net_status
 
-    def _check_host_scope(self, name, cfg_key):
+    def _check_host_scope(self, label, cfg_key):
         if not cfg_key in self._cfg:
             return ""
         ret = utils.simple_ping(self._cfg[cfg_key])
-        if ret:
-            return " " + name + ":Ok"
-        return " " + name + ":Err"
+        return " " + label + (":Ok" if ret else ":Err")
 
 
 class ReplyBot(AprsClient):
