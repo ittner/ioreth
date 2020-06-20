@@ -44,13 +44,15 @@ class TcpKissClient:
         self._outbuf = None
         self._run = False
 
-    def connect(self):
+    def connect(self, timeout=10):
         if self._sock:
             self.disconnect()
         self._inbuf = bytearray()
         self._outbuf = bytearray()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.settimeout(timeout)
         self._sock.connect((self.addr, self.port))
+        self._sock.settimeout(None)
         self.on_connect()
 
     def disconnect(self):
