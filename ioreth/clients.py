@@ -40,15 +40,15 @@ class TcpKissClient:
         self.addr = addr
         self.port = port
         self._sock = None
-        self._inbuf = None
-        self._outbuf = None
+        self._inbuf = bytearray()
+        self._outbuf = bytearray()
         self._run = False
 
     def connect(self, timeout=10):
         if self._sock:
             self.disconnect()
-        self._inbuf = bytearray()
-        self._outbuf = bytearray()
+        self._inbuf.clear()
+        self._outbuf.clear()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.settimeout(timeout)
         self._sock.connect((self.addr, self.port))
@@ -59,8 +59,8 @@ class TcpKissClient:
         if self._sock:
             self._sock.close()
             self._sock = None
-            self._inbuf = None
-            self._outbuf = None
+            self._inbuf.clear()
+            self._outbuf.clear()
             self.on_disconnect()
 
     def is_connected(self):
