@@ -155,6 +155,7 @@ class ReplyBot(AprsClient):
         self._last_blns = time.monotonic()
         self._last_cron_blns = 0
         self._last_status = time.monotonic()
+        self._last_reconnect_attempt = 0
         self._rem = remotecmd.RemoteCommandHandler()
 
     def _load_config(self):
@@ -182,8 +183,7 @@ class ReplyBot(AprsClient):
         logger.info("Connected")
 
     def on_disconnect(self):
-        logger.warning("Disconnected! Connecting again...")
-        self.connect()
+        logger.warning("Disconnected! Will try again soon...")
 
     def on_recv_frame(self, frame):
         self._aprs.handle_frame(frame)
@@ -271,9 +271,22 @@ class ReplyBot(AprsClient):
         self._last_status = now_mono
         self._rem.post_cmd(SystemStatusCommand(self._cfg["status"]))
 
+    def _check_reconnection(self):
+        if self.is_connected():
+            return
+        try:
+            # Server is in localhost, no need for a fancy exponential backoff.
+            if time.monotonic() > self._last_reconnect_attempt + 5:
+                logger.info("Trying to reconnect")
+                self._last_reconnect_attempt = time.monotonic()
+                self.connect()
+        except ConnectionRefusedError as e:
+            logger.warning(e)
+
     def on_loop_hook(self):
         AprsClient.on_loop_hook(self)
         self._check_updated_config()
+        self._check_reconnection()
         self._update_bulletins()
         self._update_status()
 
