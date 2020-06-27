@@ -91,7 +91,7 @@ class BotAprsHandler(aprs.Handler):
 
         if qry == "ping":
             self.send_aprs_msg(source, "Pong! " + args)
-        elif qry == "?aprst":
+        elif qry == "?aprst" or qry == "?ping?":
             tmp_lst = (
                 origframe.to_aprs_string()
                 .decode("utf-8", errors="replace")
