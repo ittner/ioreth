@@ -44,7 +44,7 @@ class BotAprsHandler(aprs.Handler):
         aprs.Handler.__init__(self, callsign)
         self._client = client
 
-    def on_aprs_message(self, source, addressee, text, msgid=None, via=None):
+    def on_aprs_message(self, source, addressee, text, origframe, msgid=None, via=None):
         """Handle an APRS message.
 
         This may be a directed message, a bulletin, announce ... with or
@@ -56,7 +56,7 @@ class BotAprsHandler(aprs.Handler):
             # This message was not sent for us.
             return
 
-        self.handle_aprs_msg_bot_query(source, text)
+        self.handle_aprs_msg_bot_query(source, text, origframe)
         if msgid:
             # APRS Protocol Reference 1.0.1 chapter 14 (page 72) says we can
             # reject a message by sending a rejXXXXX instead of an ackXXXXX
@@ -66,7 +66,7 @@ class BotAprsHandler(aprs.Handler):
             logger.info("Sending ack to message %s from %s.", msgid, source)
             self.send_aprs_msg(source, "ack" + msgid)
 
-    def handle_aprs_msg_bot_query(self, source, text):
+    def handle_aprs_msg_bot_query(self, source, text, origframe):
         """We got an text message direct to us. Handle it as a bot query.
         TODO: Make this a generic thing.
 
@@ -91,6 +91,13 @@ class BotAprsHandler(aprs.Handler):
 
         if qry == "ping":
             self.send_aprs_msg(source, "Pong! " + args)
+        elif qry == "?aprst":
+            tmp_lst = (
+                origframe.to_aprs_string()
+                .decode("utf-8", errors="replace")
+                .split("::", 2)
+            )
+            self.send_aprs_msg(source, tmp_lst[0] + ":")
         elif qry == "version":
             self.send_aprs_msg(source, "Python " + sys.version.replace("\n", " "))
         elif qry == "time":

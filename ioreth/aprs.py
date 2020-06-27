@@ -187,9 +187,9 @@ class Handler:
             msgid = text_msgid[1]
 
         logger.info("Message from %s: %s", source, text)
-        self.on_aprs_message(source, addressee, text, msgid, via)
+        self.on_aprs_message(source, addressee, text, origframe, msgid, via)
 
-    def on_aprs_message(self, source, addressee, text, msgid=None, via=None):
+    def on_aprs_message(self, source, addressee, text, origframe, msgid=None, via=None):
         """APRS message packet (data type: :)
         """
         pass
