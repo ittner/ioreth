@@ -224,7 +224,9 @@ class ReplyBot(AprsClient):
         # Find all standard (non rule-based) bulletins.
         keys = self._cfg.options("bulletins")
         keys.sort()
-        std_blns = [k for k in keys if k.startswith("BLN") and len(k) == 4]
+        std_blns = [
+            k for k in keys if k.startswith("BLN") and len(k) > 3 and "_" not in k
+        ]
 
         # Do not run if time was not set yet (e.g. Raspberry Pis getting their
         # time from NTP but before conecting to the network)
@@ -243,15 +245,16 @@ class ReplyBot(AprsClient):
 
             for k in keys:
                 # if key is "BLNx_rule_x", etc.
+                lst = k.split("_", 3)
                 if (
-                    (len(k) > 10)
-                    and (k[0:3] == "BLN")
-                    and (k[4:10] == "_rule_")
-                    and (k[0:4] not in std_blns)
+                    len(lst) == 3
+                    and lst[0].startswith("BLN")
+                    and lst[1] == "rule"
+                    and (lst[0] not in std_blns)
                 ):
                     expr = CronExpression(self._cfg.get("bulletins", k))
                     if expr.check_trigger(ref_time, utc_offset):
-                        bln_map[k[0:4]] = expr.comment
+                        bln_map[lst[0]] = expr.comment
 
         # If we need to send standard bulletins now, copy them to the map.
         if now_mono > (self._last_blns + max_age):
