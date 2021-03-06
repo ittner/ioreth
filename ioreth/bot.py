@@ -56,6 +56,14 @@ class BotAprsHandler(aprs.Handler):
             # This message was not sent for us.
             return
 
+        if re.match(r"^(ack|rej)\d+", text):
+            # We don't ask for acks, but may receive them anyway. Spec says
+            # acks and rejs must be exactly "ackXXXX" and "rejXXXX", case
+            # sensitive, no spaces. Be a little conservative here and do
+            # not try to interpret anything else as control messages.
+            logger.info("Ignoring control message %s from %s", text, source)
+            return
+
         self.handle_aprs_msg_bot_query(source, text, origframe)
         if msgid:
             # APRS Protocol Reference 1.0.1 chapter 14 (page 72) says we can
