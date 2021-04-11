@@ -138,24 +138,37 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
         self.status_str = ""
 
     def run(self):
-        net_status = (
-            self._check_host_scope("Eth", "eth_host")
-            + self._check_host_scope("Inet", "inet_host")
-            + self._check_host_scope("DNS", "dns_host")
-            + self._check_host_scope("VPN", "vpn_host")
+        checks = [
+            # List of all network tests in format: (label, cfg_key)
+            # There is an implicit dependency from a test of a "higher"
+            # level to one of a "lower" level, so if VPN is configured
+            # and ok, we assume Eth, DNS, etc. are ok too.
+            ("Eth", "eth_host"),
+            ("Inet", "inet_host"),
+            ("DNS", "dns_host"),
+            ("VPN", "vpn_host"),
+        ]
+
+        checks.reverse()
+        results = []
+        last_res = False
+        for label, cfg_key in checks:
+            if cfg_key in self._cfg:
+                if last_res:
+                    results.insert(0, (label, True))
+                else:
+                    last_res = utils.simple_ping(self._cfg[cfg_key])
+                    results.insert(0, (label, last_res))
+
+        net_status = " ".join(
+            [label + ":" + ("Ok" if result else "Err") for label, result in results]
         )
         self.status_str = "At %s: Uptime %s" % (
             time.strftime("%Y-%m-%d %H:%M:%S UTC%Z"),
             utils.human_time_interval(utils.get_uptime()),
         )
         if len(net_status) > 0:
-            self.status_str += "," + net_status
-
-    def _check_host_scope(self, label, cfg_key):
-        if not cfg_key in self._cfg:
-            return ""
-        ret = utils.simple_ping(self._cfg[cfg_key])
-        return " " + label + (":Ok" if ret else ":Err")
+            self.status_str += ", " + net_status
 
 
 class ReplyBot(AprsClient):
