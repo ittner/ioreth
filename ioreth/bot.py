@@ -163,6 +163,9 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "help":
             self.send_aprs_msg(sourcetrunc, "Valid cmds: NET+mesg,LOG,CQ+mesg,PING,?APRST,VERSION,TIME,HELP" + " {" + mesgid)
 
+# This logs a user's callsign into a temporary file called "netlog" which can be processed later on.
+# It also logs the inclued message into a cumulative list which can then be published somewhere.
+            
         elif qry == "net":
            sourcetrunc = source.replace('*','')
            with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as g:
@@ -171,7 +174,13 @@ class BotAprsHandler(aprs.Handler):
                 logger.info("Writing %s net message to netlog-msg", sourcetrunc)
            file = open(filename1, 'r')
            search_word = sourcetrunc
-           if(search_word in file.read()):
+
+            
+# This portion below checks if the callsign+ssid has been logged already. If it is, the callsign+ssid
+# is no longer processed so that there will be no duplications in the list (which can be unruly for APRS
+# messaging if too long. The message is still recorded in netlog-msg for publishing, though.
+
+            if(search_word in file.read()):
               self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ+mesg,LOG,HELP for more cmds" + " {" + mesgid)
               logger.info("Checked if %s already logged to prevent duplicate", sourcetrunc)
            else:
@@ -186,6 +195,9 @@ class BotAprsHandler(aprs.Handler):
                       data2 = file.read()  
                       file.close()
 
+# This portion below returns a list of checkins for the day.  
+# WISHLIST/TODO: Find a way to split the message if it is too long for the 67-character APRS message limit.
+                        
         elif qry == "log":
            if os.path.isfile(filename1):
                  file = open(filename1, 'r')
@@ -198,10 +210,10 @@ class BotAprsHandler(aprs.Handler):
 
            else:
                  self.send_aprs_msg(source, "No stations have checked in yet. Send 'net' to checkin." + " {" + mesgid) 
-#        elif qry == "status":
-#                self.send_aprs_status(self)
-# TODO CQ to return message to all stations in the day's log
-# I wanted to add a function that made the bot send a status update. Will work on that later on.
+
+# CQ forwards message to all stations in the day's log. It retrieves the list of recipients from the day's
+# line-separated list, and parses these as the destination for the message. The "replace" function is due to the 
+# extra line space that is somehow added into each callsign, which previously caused malformed frames.
 
         elif qry == "cq":
            sourcetrunc = source.replace('*','')
@@ -218,6 +230,8 @@ class BotAprsHandler(aprs.Handler):
 #                  time.sleep(10)
 # Wanted to add a time delay of XX seconds per station to prevent packet storms but apparently this is not the right place.
 # Apparently, I am trying the wrong place.
+
+# This reads the day's log from a line-separated list for processing one message at a time.
 
              file = open(filename1, 'r')
              data2 = file.read()  
@@ -418,7 +432,10 @@ class ReplyBot(AprsClient):
                 self._aprs.send_aprs_msg(bln, text)
 
 
-# These lines are for maintaining the net logs
+# These lines are for maintaining the net logs. Basically the netlog file is just a temporary file for storing a single checkin.
+# APRS sends multiple tries, thus a callsign might be duplicated. So each "net" message overwrites this file, which is then processed
+# Into a comma-separated file (for replying to LOG messages) and a line-separated file (for processing CQ messages).
+
         if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/netlog'):
            file = open('/home/pi/ioreth/ioreth/ioreth/netlog', 'r')
            data2 = file.read()  
@@ -435,6 +452,8 @@ class ReplyBot(AprsClient):
            file = open(filename1, 'r')
            data5 = file.read()  
            file.close()
+            
+# These lines below send a bulletin update with the latest checkins.            
            self._aprs.send_aprs_msg("BLN8NET", timestr + ": " + data5)
            self._aprs.send_aprs_msg("BLN9NET", "Full msg logs at http://aprs.dx1arm.net")
            logger.info("Sending new log text to BLN8NET after copying over to daily log")
