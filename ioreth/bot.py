@@ -500,5 +500,3 @@ class ReplyBot(AprsClient):
 
         if isinstance(cmd, SystemStatusCommand):
             self._aprs.send_aprs_status(cmd.status_str)
-
-
