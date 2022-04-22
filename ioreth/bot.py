@@ -236,7 +236,7 @@ class BotAprsHandler(aprs.Handler):
              file = open(filename1, 'r')
              data2 = file.read()  
              file.close()
-             self.send_aprs_msg(source, "QSP " + data2 + "{EE")
+             self.send_aprs_msg(source, "QSP " + data2 + "{373")
              logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
 
            else:
