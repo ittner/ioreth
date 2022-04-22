@@ -59,6 +59,10 @@ from os import path
 # These lines below I have added in order to provide a means for ioreth to store
 # and retrieve a list of "net" checkins on a daily basis. I did not bother to use
 # more intuitive names for the files, but I can perhaps do so in a later code cleanup.
+# Note that the paths are full. You may wish to include these settings in the config file
+# as part of code cleanup.
+# Also, note that "filename2" is the file that gets published to the web via cron job.
+# It is a cumulative list of checkins, which includes timestamp, callsign+ssid, and messege.
 
 timestr = time.strftime("%Y%m%d")
 filename1 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr
