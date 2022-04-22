@@ -15,6 +15,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
+#
+# ========
+#
+# This fork of Ioreth was modified by Angelo 4I1RAC/N2RAC to support additional
+# functionalities, such as a means to store callsigns from a "net" checkin
+# as well as a means to forward messages to all stations checked in for the day
+# It is also supported by local cron jobs on my own machine and web server
+# to publish the net log on a regular basis.
+# 
+# Pardon my code. My knowledge is very rudimentary, and I only modify or create
+# functions as I need them. If anyone can help improve on the code and the
+# logic of this script, I would very much appreciate it.
+# You may reach me at qsl@n2rac.com or simply APRS message me at N2RAC-7.
+#
+# A lot of the items here are still poorly documented if at all. Many also
+# rely on some weird or nuanced scripts or directory structures that I have
+# maintained on my own machine or server, so bear with me.
+# The non-indented comments are mine. The indented ones are by Alexandre.
+# A lot of this is trial-and-error for me, so again, please bear with me.
+#
+#
+
 
 import sys
 import time
@@ -28,12 +50,26 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 from cronex import CronExpression
-
 from .clients import AprsClient
 from . import aprs
 from . import remotecmd
 from . import utils
+from os import path
 
+# These lines below I have added in order to provide a means for ioreth to store
+# and retrieve a list of "net" checkins on a daily basis. I did not bother to use
+# more intuitive names for the files, but I can perhaps do so in a later code cleanup.
+
+timestr = time.strftime("%Y%m%d")
+filename1 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr
+filename2 = "home/pi/ioreth/ioreth/ioreth/netlog-msg"
+filename3 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr+"-cr"
+dusubs = "/home/pi/ioreth/ioreth/ioreth/dusubs"
+dusubslist = "/home/pi/ioreth/ioreth/ioreth/dusubslist"
+file = open(filename1, 'a')
+file = open(filename3, 'a')
+
+# Also Mmoved time string to place where it can be reset at midnight
 
 def is_br_callsign(callsign):
     return bool(re.match("P[PTUY][0-9].+", callsign.upper()))
@@ -72,7 +108,9 @@ class BotAprsHandler(aprs.Handler):
             # semantically correct to use this for an invalid query for a bot,
             # so always acks.
             logger.info("Sending ack to message %s from %s.", msgid, source)
-            self.send_aprs_msg(source, "ack" + msgid)
+            self.send_aprs_msg(source.replace('*',''), "ack" + msgid)
+
+
 
     def handle_aprs_msg_bot_query(self, source, text, origframe):
         """We got an text message direct to us. Handle it as a bot query.
@@ -82,12 +120,17 @@ class BotAprsHandler(aprs.Handler):
         text: message text.
         """
 
+        sourcetrunc = source.replace('*','')
         qry_args = text.lstrip().split(" ", 1)
         qry = qry_args[0].lower()
         args = ""
+
+# Assign a message ID. We need a more elegant solution than this one. Right now, it
+# Just uses a number based on the current minute. Not very nice, but it works.
+
+        mesgid = time.strftime("%u%M")
         if len(qry_args) == 2:
             args = qry_args[1]
-
         random_replies = {
             "moria": "Pedo mellon a minno",
             "mellon": "*door opens*",
@@ -98,7 +141,7 @@ class BotAprsHandler(aprs.Handler):
         }
 
         if qry == "ping":
-            self.send_aprs_msg(source, "Pong! " + args)
+            self.send_aprs_msg(source, "Pong! " + args + "{" + mesgid)
         elif qry == "?aprst" or qry == "?ping?":
             tmp_lst = (
                 origframe.to_aprs_string()
@@ -107,22 +150,112 @@ class BotAprsHandler(aprs.Handler):
             )
             self.send_aprs_msg(source, tmp_lst[0] + ":")
         elif qry == "version":
-            self.send_aprs_msg(source, "Python " + sys.version.replace("\n", " "))
+            self.send_aprs_msg(source, "Python " + sys.version.replace("\n", " ") + " {" + mesgid)
         elif qry == "time":
+            mesgid = time.strftime("%S")
             self.send_aprs_msg(
-                source, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S UTC%Z")
+                source, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z") + " {" + mesgid
             )
         elif qry == "help":
-            self.send_aprs_msg(source, "Valid commands: ping, version, time, help")
+            self.send_aprs_msg(sourcetrunc, "Valid cmds: NET+mesg,LOG,CQ+mesg,PING,?APRST,VERSION,TIME,HELP" + " {" + mesgid)
+
+        elif qry == "net":
+           sourcetrunc = source.replace('*','')
+           with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as g:
+                data3 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                g.write(data3)
+                logger.info("Writing %s net message to netlog-msg", sourcetrunc)
+           file = open(filename1, 'r')
+           search_word = sourcetrunc
+           if(search_word in file.read()):
+              self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ+mesg,LOG,HELP for more cmds" + " {" + mesgid)
+              logger.info("Checked if %s already logged to prevent duplicate", sourcetrunc)
+           else:
+                with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as f:
+                      f.write(sourcetrunc)
+                      logger.info("Writing %s checkin to netlog", source)
+                self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". U may msg all QRX by sending 'CQ' + text." + " {" + mesgid)
+                self.send_aprs_msg(sourcetrunc, "Msg 'Log' fr list. Pls QRX for CQ msgs. aprs.dx1arm.net for info. {199")
+                logger.info("Replying to %s checkin message", sourcetrunc)
+                if os.path.isfile(filename1):
+                      file = open(filename1, 'r')
+                      data2 = file.read()  
+                      file.close()
+
+        elif qry == "log":
+           if os.path.isfile(filename1):
+                 file = open(filename1, 'r')
+                 data2 = file.read()  
+                 file.close()
+                 self.send_aprs_msg(source, timestr + ": " + data2 + "{" + mesgid)
+                 self.send_aprs_msg(source, "Send 'CQ'+text to msg all in today's log. Info: aprs.dx1arm.net {297")
+                 logger.info("Replying with stations heard today: %s", data2)
+
+
+           else:
+                 self.send_aprs_msg(source, "No stations have checked in yet. Send 'net' to checkin." + " {" + mesgid) 
+#        elif qry == "status":
+#                self.send_aprs_status(self)
+# TODO CQ to return message to all stations in the day's log
+# I wanted to add a function that made the bot send a status update. Will work on that later on.
+
+        elif qry == "cq":
+           sourcetrunc = source.replace('*','')
+           if os.path.isfile(filename3):
+             lines = []
+             with open(filename3) as f:
+                  lines = f.readlines()
+             count = 0
+             for line in lines:
+                  count += 1
+                  self.send_aprs_msg(f'{line}'.replace('\n',''), sourcetrunc + "/" + args + " {" + mesgid)
+                  self.send_aprs_msg(f'{line}'.replace('\n',''), "Reply 'CQ'+text to send all on today's list. 'Log' to view." + " {398")
+                  logger.info("Sending CQ message to %s", line)
+#                  time.sleep(10)
+# Wanted to add a time delay of XX seconds per station to prevent packet storms but apparently this is not the right place.
+# Apparently, I am trying the wrong place.
+
+             file = open(filename1, 'r')
+             data2 = file.read()  
+             file.close()
+             self.send_aprs_msg(source, "QSP " + data2 + "{EE")
+             logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
+
+           else:
+                  self.send_aprs_msg(sourcetrunc, "No stations have checked in yet. Send 'net' to checkin." + " {" + mesgid) 
+                  logger.info("Sending CQ message to %s", line)
+
+# This is for a certain list of permanent subscribers, which I have named DU. It's intended for emergency/tactical purposes only,
+# which includes stations in my nearby vicinity. In essence, it acts like "CQ" but the list is not refereshed every day.
+# I intend to copy this functionality to a group list that can be subscribed to like NET but does not expire every midnight.
+
+        elif qry == "du":
+             sourcetrunc = source.replace('*','')
+             lines = []
+             with open(dusubs) as f:
+                  lines = f.readlines()
+             count = 0
+             for line in lines:
+                  count += 1
+                  self.send_aprs_msg(f'{line}'.replace('\n',''), sourcetrunc + "/" + args + " {" + mesgid)
+                  logger.info("Sending DU message to %s", line)
+             file = open(dusubslist, 'r')
+             data2 = file.read()  
+             file.close()
+             self.send_aprs_msg(source, "Sent msg to " + count + " recipients. Ask N2RAC for list." + " {" + mesgid)
+             logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
+
         elif qry in random_replies:
-            self.send_aprs_msg(source, random_replies[qry])
+            self.send_aprs_msg(source, random_replies[qry]  + "{" + mesgid)
         else:
             if is_br_callsign(source):
                 self.send_aprs_msg(
                     source, "Sou um bot. Envie 'help' para a lista de comandos"
                 )
             else:
-                self.send_aprs_msg(source, "I'm a bot. Send 'help' for command list")
+                self.send_aprs_msg(source, "'Net'+text to checkin,'Log' for QRX list,'Help' for cmds." + " {" + mesgid)
+
+
 
     def send_aprs_msg(self, to_call, text):
         self._client.enqueue_frame(self.make_aprs_msg(to_call, text))
@@ -145,7 +278,7 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
             + self._check_host_scope("VPN", "vpn_host")
         )
         self.status_str = "At %s: Uptime %s" % (
-            time.strftime("%Y-%m-%d %H:%M:%S UTC%Z"),
+            time.strftime("%Y-%m-%d %H:%M:%S %Z"),
             utils.human_time_interval(utils.get_uptime()),
         )
         if len(net_status) > 0:
@@ -172,6 +305,7 @@ class ReplyBot(AprsClient):
         self._last_status = time.monotonic()
         self._last_reconnect_attempt = 0
         self._rem = remotecmd.RemoteCommandHandler()
+
 
     def _load_config(self):
         try:
@@ -202,7 +336,6 @@ class ReplyBot(AprsClient):
 
     def on_recv_frame(self, frame):
         self._aprs.handle_frame(frame)
-
     def _update_bulletins(self):
         if not self._cfg.has_section("bulletins"):
             return
@@ -245,6 +378,9 @@ class ReplyBot(AprsClient):
             # Randomize the delay until next check to prevent packet storms
             # in the first seconds following a minute. It will, of course,
             # still run within the minute.
+            timestr = time.strftime("%Y%m%d")
+            filename1 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr
+
             self._last_cron_blns = 60 * int(now_time / 60.0) + random.randint(0, 30)
 
             cur_time = time.localtime()
@@ -277,6 +413,44 @@ class ReplyBot(AprsClient):
                 logger.info("Posting bulletin: %s=%s", bln, text)
                 self._aprs.send_aprs_msg(bln, text)
 
+
+# These lines are for maintaining the net logs
+        if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/netlog'):
+           file = open('/home/pi/ioreth/ioreth/ioreth/netlog', 'r')
+           data2 = file.read()  
+           file.close()
+           fout = open(filename1, 'a')
+           fout.write(data2)
+           fout.write(",")
+           fout = open(filename3, 'a')
+           fout.write(data2)
+           fout.write("\n")
+           logger.info("Copying latest checkin into day's net logs")
+           os.remove('/home/pi/ioreth/ioreth/ioreth/netlog')
+           logger.info("Deleting net log scratch file")
+           file = open(filename1, 'r')
+           data5 = file.read()  
+           file.close()
+           self._aprs.send_aprs_msg("BLN8NET", timestr + ": " + data5)
+           self._aprs.send_aprs_msg("BLN9NET", "Full msg logs at http://aprs.dx1arm.net")
+           logger.info("Sending new log text to BLN8NET after copying over to daily log")
+           return
+
+        if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/nettext'):
+           file = open('/home/pi/ioreth/ioreth/ioreth/nettext', 'r')
+           data4 = file.read()  
+           file.close()
+           fout = open('/home/pi/ioreth/ioreth/ioreth/netlog-msg', 'a')
+           fout.write(data4)
+           fout.write("\n")
+           logger.info("Copying latest checkin message into cumulative net log")
+           os.remove('/home/pi/ioreth/ioreth/ioreth/nettext')
+           logger.info("Deleting net text scratch file")
+           return
+
+    def send_aprs_msg(self, to_call, text):
+        self._client.enqueue_frame(self.make_aprs_msg(to_call, text))
+
     def _update_status(self):
         if not self._cfg.has_section("status"):
             return
@@ -288,6 +462,8 @@ class ReplyBot(AprsClient):
 
         self._last_status = now_mono
         self._rem.post_cmd(SystemStatusCommand(self._cfg["status"]))
+
+
 
     def _check_reconnection(self):
         if self.is_connected():
@@ -320,3 +496,5 @@ class ReplyBot(AprsClient):
 
         if isinstance(cmd, SystemStatusCommand):
             self._aprs.send_aprs_status(cmd.status_str)
+
+
