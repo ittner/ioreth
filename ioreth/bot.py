@@ -131,8 +131,11 @@ class BotAprsHandler(aprs.Handler):
 
 # Assign a message ID. We need a more elegant solution than this one. Right now, it
 # Just uses a number based on the current minute. Not very nice, but it works.
+# Multi-message sending lines below use a somehow unique ID based on the 3 chars from
+# their callsign+ssid value. Msg ID supports a total of 5 characters.
 
-        mesgid = time.strftime("%u%M")
+        mesgid = time.strftime("%M")
+        mpref = source[1:4] # this gets 3 characters from the callsign
         if len(qry_args) == 2:
             args = qry_args[1]
         random_replies = {
@@ -224,8 +227,11 @@ class BotAprsHandler(aprs.Handler):
              count = 0
              for line in lines:
                   count += 1
-                  self.send_aprs_msg(f'{line}'.replace('\n',''), sourcetrunc + "/" + args + " {" + mesgid)
-                  self.send_aprs_msg(f'{line}'.replace('\n',''), "Reply 'CQ'+text to send all on today's list. 'Log' to view." + " {398")
+# message prefix gives a somehow unique message id, which is important when sending multiple messages
+# to prevent ACK from another station inadvertently cancelling a message transmit.
+                  mespre = line[1:4]
+                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args + " {" + mespre + mesgid)
+                  self.send_aprs_msg(line.replace('\n',''), "Reply 'CQ'+text to send all on today's list. 'Log' to view." + " {398")
                   logger.info("Sending CQ message to %s", line)
 #                  time.sleep(10)
 # Wanted to add a time delay of XX seconds per station to prevent packet storms but apparently this is not the right place.
@@ -255,7 +261,8 @@ class BotAprsHandler(aprs.Handler):
              count = 0
              for line in lines:
                   count += 1
-                  self.send_aprs_msg(f'{line}'.replace('\n',''), sourcetrunc + "/" + args + " {" + mesgid)
+                  mespre = line[1:4]
+                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args + " {" mespre + mesgid)
                   logger.info("Sending DU message to %s", line)
              file = open(dusubslist, 'r')
              data2 = file.read()  
