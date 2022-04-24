@@ -128,14 +128,6 @@ class BotAprsHandler(aprs.Handler):
         qry_args = text.lstrip().split(" ", 1)
         qry = qry_args[0].lower()
         args = ""
-
-# Assign a message ID. We need a more elegant solution than this one. Right now, it
-# Just uses a number based on the current minute. Not very nice, but it works.
-# Multi-message sending lines below use a somehow unique ID based on the 3 chars from
-# their callsign+ssid value. Msg ID supports a total of 5 characters.
-
-        mesgid = time.strftime("%M")
-        mpref = source[1:4] # this gets 3 characters from the callsign
         if len(qry_args) == 2:
             args = qry_args[1]
         random_replies = {
@@ -148,7 +140,7 @@ class BotAprsHandler(aprs.Handler):
         }
 
         if qry == "ping":
-            self.send_aprs_msg(source, "Pong! " + args + "{" + mesgid)
+            self.send_aprs_msg(source, "Pong! " + args )
         elif qry == "?aprst" or qry == "?ping?":
             tmp_lst = (
                 origframe.to_aprs_string()
@@ -157,14 +149,13 @@ class BotAprsHandler(aprs.Handler):
             )
             self.send_aprs_msg(source, tmp_lst[0] + ":")
         elif qry == "version":
-            self.send_aprs_msg(source, "Python " + sys.version.replace("\n", " ") + " {" + mesgid)
+            self.send_aprs_msg(source, "Python " + sys.version.replace("\n", " "))
         elif qry == "time":
-            mesgid = time.strftime("%S")
             self.send_aprs_msg(
-                source, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z") + " {" + mesgid
+                source, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
             )
         elif qry == "help":
-            self.send_aprs_msg(sourcetrunc, "Valid cmds: NET+mesg,LOG,CQ+mesg,PING,?APRST,VERSION,TIME,HELP" + " {" + mesgid)
+            self.send_aprs_msg(sourcetrunc, "Valid cmds: NET+mesg,CQ+mesg,LIST,LAST,LOG,PING,?APRST,VERSION,TIME,HELP")
 
 # This logs a user's callsign into a temporary file called "netlog" which can be processed later on.
 # It also logs the inclued message into a cumulative list which can then be published somewhere.
@@ -184,14 +175,14 @@ class BotAprsHandler(aprs.Handler):
 # messaging if too long. The message is still recorded in netlog-msg for publishing, though.
 
             if(search_word in file.read()):
-              self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ+mesg,LOG,HELP for more cmds" + " {" + mesgid)
+              self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ+mesg,LOG,LIST,HELP for cmds")
               logger.info("Checked if %s already logged to prevent duplicate", sourcetrunc)
            else:
                 with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as f:
                       f.write(sourcetrunc)
                       logger.info("Writing %s checkin to netlog", source)
-                self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". U may msg all QRX by sending 'CQ' + text." + " {" + mesgid)
-                self.send_aprs_msg(sourcetrunc, "Msg 'Log' fr list. Pls QRX for CQ msgs. aprs.dx1arm.net for info. {199")
+                self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". U may msg all QRX by sending 'CQ' + text.")
+                self.send_aprs_msg(sourcetrunc, "LOG fr stns. LIST last 5msg. QRX for CQ msgs. aprs.dx1arm.net info.")
                 logger.info("Replying to %s checkin message", sourcetrunc)
                 if os.path.isfile(filename1):
                       file = open(filename1, 'r')
@@ -201,18 +192,18 @@ class BotAprsHandler(aprs.Handler):
 # This portion below returns a list of checkins for the day.  
 # WISHLIST/TODO: Find a way to split the message if it is too long for the 67-character APRS message limit.
                         
-        elif qry == "log":
+        elif qry == "list":
            if os.path.isfile(filename1):
                  file = open(filename1, 'r')
                  data2 = file.read()  
                  file.close()
-                 self.send_aprs_msg(source, timestr + ": " + data2 + "{" + mesgid)
-                 self.send_aprs_msg(source, "Send 'CQ'+text to msg all in today's log. Info: aprs.dx1arm.net {297")
+                 self.send_aprs_msg(source, timestr + ": " + data2 )
+                 self.send_aprs_msg(source, "CQ +text to msg all log. LAST for 5 msgs Info aprs.dx1arm.net" )
                  logger.info("Replying with stations heard today: %s", data2)
 
 
            else:
-                 self.send_aprs_msg(source, "No stations have checked in yet. Send 'net' to checkin." + " {" + mesgid) 
+                 self.send_aprs_msg(source, "No stations have checked in yet. Send 'net' to checkin." ) 
 
 # CQ forwards message to all stations in the day's log. It retrieves the list of recipients from the day's
 # line-separated list, and parses these as the destination for the message. The "replace" function is due to the 
@@ -229,9 +220,8 @@ class BotAprsHandler(aprs.Handler):
                   count += 1
 # message prefix gives a somehow unique message id, which is important when sending multiple messages
 # to prevent ACK from another station inadvertently cancelling a message transmit.
-                  mespre = line[1:4]
-                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args + " {" + mespre + mesgid)
-                  self.send_aprs_msg(line.replace('\n',''), "Reply 'CQ'+text to send all on today's list. 'Log' to view." + " {398")
+                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args )
+                  self.send_aprs_msg(line.replace('\n',''), "Reply 'CQ'+text to send all on today's list. 'Log' to view." )
                   logger.info("Sending CQ message to %s", line)
 #                  time.sleep(10)
 # Wanted to add a time delay of XX seconds per station to prevent packet storms but apparently this is not the right place.
@@ -242,11 +232,11 @@ class BotAprsHandler(aprs.Handler):
              file = open(filename1, 'r')
              data2 = file.read()  
              file.close()
-             self.send_aprs_msg(source, "QSP " + data2 + "{373")
+             self.send_aprs_msg(source, "QSP " + data2 )
              logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
 
            else:
-                  self.send_aprs_msg(sourcetrunc, "No stations have checked in yet. Send 'net' to checkin." + " {" + mesgid) 
+                  self.send_aprs_msg(sourcetrunc, "No stations have checked in yet. Send 'net' to checkin." ) 
                   logger.info("Sending CQ message to %s", line)
 
 # This is for a certain list of permanent subscribers, which I have named DU. It's intended for emergency/tactical purposes only,
@@ -261,24 +251,48 @@ class BotAprsHandler(aprs.Handler):
              count = 0
              for line in lines:
                   count += 1
-                  mespre = line[1:4]
-                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args + " {" mespre + mesgid)
+                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args )
                   logger.info("Sending DU message to %s", line)
              file = open(dusubslist, 'r')
              data2 = file.read()  
              file.close()
-             self.send_aprs_msg(source, "Sent msg to " + count + " recipients. Ask N2RAC for list." + " {" + mesgid)
+             self.send_aprs_msg(source, "Sent msg to " + count + " recipients. Ask N2RAC for list." )
              logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
 
+        elif qry == "last": 
+             with open(cqlog) as netlast:
+                  lasts = netlast.readlines()
+                  lastlines = lasts[-5:]
+                  netlast.close()
+             self.send_aprs_msg(sourcetrunc, "Last 5 CQ msgs sent. CQ +text to reply,LIST for QRX,HELP for cmds." )
+             count = 0
+             for line in lastlines:
+                  count +=1
+                  self.send_aprs_msg(sourcetrunc, line[24:91] )
+                  logger.info("Sending last 5 cqlog messages to  %s", sourcetrunc)
+        elif qry == "log": 
+             with open(filename2) as netlast:
+                  lasts = netlast.readlines()
+                  lastlines = lasts[-5:]
+                  netlast.close()
+             self.send_aprs_msg(sourcetrunc, "Last 5 NET chckins. NET +text to join,LIST for QRX,HELP for cmds." )
+             count = 0
+             for line in lastlines:
+                  count +=1
+                  self.send_aprs_msg(sourcetrunc, line[24:91] )
+                  logger.info("Sending last 5 netlog messages to  %s", sourcetrunc)
+
+            
+            
         elif qry in random_replies:
-            self.send_aprs_msg(source, random_replies[qry]  + "{" + mesgid)
+            self.send_aprs_msg(source, random_replies[qry] )
         else:
             if is_br_callsign(source):
                 self.send_aprs_msg(
                     source, "Sou um bot. Envie 'help' para a lista de comandos"
                 )
             else:
-                self.send_aprs_msg(source, "'Net'+text to checkin,'Log' for QRX list,'Help' for cmds." + " {" + mesgid)
+                self.send_aprs_msg(source, "'Net'+text to checkin,'Log' for QRX list,'Help' for cmds." )
 
 
 
