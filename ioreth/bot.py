@@ -167,7 +167,7 @@ class BotAprsHandler(aprs.Handler):
                 sourcetrunc, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
             )
         elif qry == "help":
-            self.send_aprs_msg(sourcetrunc, "Valid cmds:NET +msg,CQ +msg,LIST,LAST,LOG,?APRST,ABOUT,TIME,HELP")
+            self.send_aprs_msg(sourcetrunc, "NET +msg,CQ +msg,LIST,LAST,LOG,?APRST,SMS +# +msg,ABOUT,TIME,HELP")
 
 # This part is the net checkin. It logs callsigns into a daily list, and it also logs all messages into a cumulative list posted on the web
 
@@ -186,15 +186,17 @@ class BotAprsHandler(aprs.Handler):
            with open(filename1, 'r') as file:
                  search_word = sourcetrunc
                  if(search_word in file.read()):
-                      self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ +msg,LIST,LOG,LAST,HELP for cmds")
+                      self.send_aprs_msg(sourcetrunc, "QSL ur addnl msg.CQ +msg,LIST,LOG,LAST,HELP.Net expires 00Z+8.")
                       logger.info("Checked if %s already logged to prevent duplicate. Skipping checkin", sourcetrunc)
+                      file.close()
 # If not in log, then add them
                  else:
                       with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as f:
                          f.write(sourcetrunc)
+                         f.close()
                          logger.info("Writing %s checkin to netlog", source)
-                      self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". U may msg all QRX-send CQ +text.LAST to review last5.")
-                      self.send_aprs_msg(sourcetrunc, "Msg LIST to view. Pls QRX for CQ msgs. aprs.dx1arm.net for info." )
+                      self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". CQ +text grpchat.LAST review last3.LIST view QRXlist.")
+                      self.send_aprs_msg(sourcetrunc, "Pls QRX for CQ msgs. Net expires 00Z+8. aprs.dx1arm.net for info." )
                       logger.info("Replying to %s checkin message", sourcetrunc)
 
 # Record the message somewhere to check if next message is dupe
@@ -202,16 +204,16 @@ class BotAprsHandler(aprs.Handler):
                 lasttext = args
                 g.write(lasttext)
                 logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
-
+                g.close()
 
         elif qry == "list" or qry == "?aprsd":
            if os.path.isfile(filename1):
                  file = open(filename1, 'r')
                  data2 = file.read()  
                  file.close()
-                 self.send_aprs_msg(source, timestr + ": " + data2 )
+                 self.send_aprs_msg(source, timestr + ": " + data2.replace('\n','') )
                  self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
-                 logger.info("Replying with stations heard today: %s", data2)
+                 logger.info("Replying with stations heard today: %s", data2.replace('\n','') )
            else:
                  self.send_aprs_msg(source, "No stations have checked in yet. NET +msg to checkin.") 
 
@@ -275,7 +277,8 @@ class BotAprsHandler(aprs.Handler):
            daylog = open(filename1, 'r')
            dayta2 = daylog.read() 
            daylog.close()
-           dayta3 = dayta2.replace(sourcetrunc + ',','')
+           dayta31 = dayta2.replace(sourcetrunc + ',','')
+           dayta3 = dayta31.replace('\n','')
            self.send_aprs_msg(source, "QSP " + dayta3 )
            logger.info("Advising %s of messages sent to %s", sourcetrunc, dayta3)
 
@@ -303,25 +306,25 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "last": 
              with open(cqlog) as netlast:
                   lasts = netlast.readlines()
-                  lastlines = lasts[-5:]
+                  lastlines = lasts[-3:]
                   netlast.close()
-             self.send_aprs_msg(sourcetrunc, "Last 5 CQ msgs sent. CQ +text to reply,LIST for QRX,HELP for cmds." )
+             self.send_aprs_msg(sourcetrunc, "Last 3 CQ msgs sent. CQ +text to reply,LIST for QRX,HELP for cmds." )
              count = 0
              for line in lastlines:
                   count +=1
                   self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
-                  logger.info("Sending last 5 cqlog messages to  %s", sourcetrunc)
+                  logger.info("Sending last 3 cqlog messages to  %s", sourcetrunc)
         elif qry == "log":
              with open(filename2) as netlast:
                   lasts = netlast.readlines()
-                  lastlines = lasts[-5:]
+                  lastlines = lasts[-3:]
                   netlast.close()
-             self.send_aprs_msg(sourcetrunc, "Last 5 NET msgs. NET +text to join,LIST for QRX,HELP for cmds." )
+             self.send_aprs_msg(sourcetrunc, "Last 3 NET msgs. NET +text to join,LIST for QRX,HELP for cmds." )
              count = 0
              for line in lastlines:
                   count +=1
                   self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
-                  logger.info("Sending last 5 netlog messages to  %s", sourcetrunc)
+                  logger.info("Sending last 3 netlog messages to  %s", sourcetrunc)
 
 # SMS handling for DU recipients. Note that this requires gammu-smsd daemon running on your local machine, with
 # the user having access to the SMS storage directories, as well as an extra folder called "processed" where
@@ -337,27 +340,36 @@ class BotAprsHandler(aprs.Handler):
           if not args == open('/home/pi/ioreth/ioreth/ioreth/lastmsg').read():
              logger.info("Received message for SMS that is not exact duplicate, now sending SMS" )
 
-             self.send_aprs_msg(sourcetrunc, "Sending SMS to: " + SMS_DESTINATION )
-             logger.info("Replying to %s that SMS to %s is being sent", sourcetrunc, SMS_DESTINATION)
+             if args == "":
+                 self.send_aprs_msg(sourcetrunc, "Usage: SMS 09XXXXXXXXX your message. PH nos only" )
+                 logger.info("Replying to %s about SMS instructions", sourcetrunc)
+             else:
 
-             with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
-                 lasttext = args
-                 g.write(lasttext)
-                 logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
-             sourcetrunc = source.replace('*','')
+#               self.send_aprs_msg(sourcetrunc, "Sending SMS to: " + SMS_DESTINATION )
+#               logger.info("Replying to %s that SMS to %s is being sent", sourcetrunc, SMS_DESTINATION)
+
+               with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
+                   lasttext = args
+                   g.write(lasttext)
+                   logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
+               sourcetrunc = source.replace('*','')
 
 # Validating the destination. In the Philippines, cell numbers start with 09XX. Adjust this accordingly.
 
-             if not SMS_DESTINATION[0:2] == "09":
-               self.send_aprs_msg(sourcetrunc, SMS_DESTINATION + " is not a valid PH no. Use 09XXXXXXXXX no dashes&spaces." )
-               logger.info("Replying to %s that %s is not a valid number.", sourcetrunc, SMS_DESTINATION)
-               return
+               if not SMS_DESTINATION[0:2] == "09":
+                 self.send_aprs_msg(sourcetrunc, "Can only txt valid PH no. Usage:SMS 09XXXXXXXXX msg." )
+                 logger.info("Replying to %s that %s is not a valid number.", sourcetrunc, SMS_DESTINATION)
+                 return
 
-             try:
-                 os.system(sendsms)
-             except:
-                 self.send_aprs_msg(sourcetrunc, 'SMS Could not be sent')
-                 logger.info("Could not send SMS from %s to %s", sourcetrunc, SMS_DESTINATION)
+               try:
+#                   os.system(sendsms)
+                   self.send_aprs_msg(sourcetrunc, "Sending SMS to: " + SMS_DESTINATION )
+                   logger.info("Replying to %s that SMS to %s is being sent", sourcetrunc, SMS_DESTINATION)
+                   os.system(sendsms)
+                   logger.info("Sending SMS from %s to %s", sourcetrunc, SMS_DESTINATION)
+               except:
+                   self.send_aprs_msg(sourcetrunc, 'SMS Could not be sent')
+                   logger.info("Could not send SMS from %s to %s", sourcetrunc, SMS_DESTINATION)
 
 # This is necessary, since APRS messages may be sent or received multiple times (e.g., heard from another digipeater)
 # This ensures that the SMS being sent will not be doubled. When the same message is heared on this machine, processing
@@ -368,15 +380,30 @@ class BotAprsHandler(aprs.Handler):
 
         elif qry in random_replies:
             self.send_aprs_msg(source, random_replies[qry] )
-        elif qry == "bye" and source == "N2RAC-7":
-             self.send_aprs_msg(sourcetrunc, "bcnu" )
+
+# These lines are for executing certain commands on the server, such as rebooting, etc.
+# Make sure the account has sufficient privileges!
+
+# This reboots the system
+        elif qry == "YOURCOMMAND" and source == "YOURCALLSIGN":
+             self.send_aprs_msg(sourcetrunc, "bye" )
              cmd = 'sudo shutdown --reboot'
              os.system(cmd)
-        elif qry == "armbye" and ( source == "N2RAC-7" or "4I1RAC" or  "DW1YKX" ):
-             os.system('ssh pi-star@dx1armlink.local sudo shutdown --reboot')
-             self.send_aprs_msg(sourcetrunc, "wait" )
+
+# This reboots another connected system within the local network. There is option
+# For different source callsigns to issue the command.
+# Not very secure, but hey what's the worst that they can do? Just reboot it!
+# Besides, you have the option of using some obscure word that you will only use
+# occassionaly or only once whnen something goes wrong. This is great for APRS digis/machines
+# that are in unattended locations such as repeater sites.
+# You can even execute server-side scripts depending on your need.
+
+        elif qry == "YOURCOMMAND2" and ( source == "CALLSIGN1" or "CALLSIGN2" or  "CALLSIGN3" ):
+             os.system('ssh user@otherserver sudo shutdown --reboot')
+             self.send_aprs_msg(sourcetrunc, "ttfn" )
         else:
             self.send_aprs_msg(source, "NET +text to checkin,CQ +text grp msg,LIST to view,HELP for cmds." )
+
             with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
                 lasttext = args
                 g.write(lasttext)
@@ -556,7 +583,11 @@ class ReplyBot(AprsClient):
                     smsread = smstxt.read()
                     smsreceived = smsread.replace('\n',' ')
                     smstxt.close()
-                    if smsreceived[0:1] == "@":
+                    prefix = filename[22:25]
+                    if not prefix == "639":
+                               logger.info("Possibly a carrier message or spam from %s. No longer processing", smssender )
+                    else:
+                      if smsreceived[0:1] == "@":
                           callsig = smsreceived.split(' ', 1)[0]
                           callsign = callsig.upper()
                           smsbody = smsreceived.split(' ', 1)[1]
@@ -565,13 +596,13 @@ class ReplyBot(AprsClient):
                                smsbody2 = smsbody[50:]
                                self._aprs.send_aprs_msg(callsign[1:], "0" + smssender + " 1/2:" + smsbody1)
                                self._aprs.send_aprs_msg(callsign[1:], "2/2:" + smsbody2)
-                               self._aprs.send_aprs_msg(callsign[1:], "Send SMS 11digitcel# Message to reply to PH SMS.")
+                               self._aprs.send_aprs_msg(callsign[1:], "SMS 11digitcel# Message to send/reply to PH SMS.")
                                logger.info("SMS too long to fit 1 APRS message. Splitting into 2.")
                           else:
                                self._aprs.send_aprs_msg(callsign[1:], "0" + smssender + ":" + smsbody)
-                               self._aprs.send_aprs_msg(callsign[1:], "Send SMS 11digitcel# Message to reply to PH SMS.")
+                               self._aprs.send_aprs_msg(callsign[1:], "SMS 11digitcel# Message to send/reply to PH SMS.")
                                logger.info("SMS is in correct formt. Sending to %s.", callsign)
-                    else:
+                      else:
                           sendsms = ( "echo 'Incorrect format.\n\n@CALSGN-SSID Message\n\nto send to an APRS recipient.' | gammu-smsd-inject TEXT 0" + smssender )
                           os.system(sendsms)
                     movecmd = ("sudo mv "+ smsinbox + filename + " /var/spool/gammu/processed")
