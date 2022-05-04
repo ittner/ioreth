@@ -37,9 +37,7 @@
 #
 #
 
-from __future__ import print_function
 import sys
-sys.path.append('/home/pi/python-gsmmodem')
 import time
 import logging
 import configparser
@@ -56,10 +54,6 @@ from . import aprs
 from . import remotecmd
 from . import utils
 from os import path
-
-# This is for SMS sending feature for within DU land
-from .gsmmodem.modem import GsmModem, SentSms
-
 
 # These lines below I have added in order to provide a means for ioreth to store
 # and retrieve a list of "net" checkins on a daily basis. I did not bother to use
