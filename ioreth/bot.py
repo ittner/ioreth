@@ -37,8 +37,9 @@
 #
 #
 
-
+from __future__ import print_function
 import sys
+sys.path.append('/home/pi/python-gsmmodem')
 import time
 import logging
 import configparser
@@ -56,22 +57,25 @@ from . import remotecmd
 from . import utils
 from os import path
 
+# This is for SMS sending feature for within DU land
+from .gsmmodem.modem import GsmModem, SentSms
+
+
 # These lines below I have added in order to provide a means for ioreth to store
 # and retrieve a list of "net" checkins on a daily basis. I did not bother to use
 # more intuitive names for the files, but I can perhaps do so in a later code cleanup.
-# Note that the paths are full. You may wish to include these settings in the config file
-# as part of code cleanup.
-# Also, note that "filename2" is the file that gets published to the web via cron job.
-# It is a cumulative list of checkins, which includes timestamp, callsign+ssid, and messege.
 
 timestr = time.strftime("%Y%m%d")
 filename1 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr
 filename2 = "home/pi/ioreth/ioreth/ioreth/netlog-msg"
 filename3 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr+"-cr"
+cqmesg = "/home/pi/ioreth/ioreth/ioreth/cqlog/cqmesg"
+cqlog = "/home/pi/ioreth/ioreth/ioreth/cqlog/cqlog"
 dusubs = "/home/pi/ioreth/ioreth/ioreth/dusubs"
 dusubslist = "/home/pi/ioreth/ioreth/ioreth/dusubslist"
 file = open(filename1, 'a')
 file = open(filename3, 'a')
+
 
 # Also Mmoved time string to place where it can be reset at midnight
 
@@ -104,7 +108,7 @@ class BotAprsHandler(aprs.Handler):
             logger.info("Ignoring control message %s from %s", text, source)
             return
 
-        self.handle_aprs_msg_bot_query(source, text, origframe)
+#        self.handle_aprs_msg_bot_query(source, text, origframe)
         if msgid:
             # APRS Protocol Reference 1.0.1 chapter 14 (page 72) says we can
             # reject a message by sending a rejXXXXX instead of an ackXXXXX
@@ -114,6 +118,7 @@ class BotAprsHandler(aprs.Handler):
             logger.info("Sending ack to message %s from %s.", msgid, source)
             self.send_aprs_msg(source.replace('*',''), "ack" + msgid)
 
+        self.handle_aprs_msg_bot_query(source, text, origframe)
 
 
     def handle_aprs_msg_bot_query(self, source, text, origframe):
@@ -128,8 +133,13 @@ class BotAprsHandler(aprs.Handler):
         qry_args = text.lstrip().split(" ", 1)
         qry = qry_args[0].lower()
         args = ""
+        if not os.path.isfile(filename1):
+            file = open(filename1, 'w')
+        if not os.path.isfile(filename3):
+            file = open(filename3, 'w')
         if len(qry_args) == 2:
             args = qry_args[1]
+
         random_replies = {
             "moria": "Pedo mellon a minno",
             "mellon": "*door opens*",
@@ -140,108 +150,138 @@ class BotAprsHandler(aprs.Handler):
         }
 
         if qry == "ping":
-            self.send_aprs_msg(source, "Pong! " + args )
+            self.send_aprs_msg(sourcetrunc, "Pong! " + args )
         elif qry == "?aprst" or qry == "?ping?":
             tmp_lst = (
                 origframe.to_aprs_string()
                 .decode("utf-8", errors="replace")
                 .split("::", 2)
             )
-            self.send_aprs_msg(source, tmp_lst[0] + ":")
+            self.send_aprs_msg(sourcetrunc, tmp_lst[0] + ":")
         elif qry == "version":
-            self.send_aprs_msg(source, "Python " + sys.version.replace("\n", " "))
+            self.send_aprs_msg(sourcetrunc, "Python " + sys.version.replace("\n", " "))
+        elif qry == "about":
+            self.send_aprs_msg(sourcetrunc, "APRS bot by N2RAC/4I1RAC based on ioreth by PP5ITT. aprs.dx1arm.net" )
         elif qry == "time":
             self.send_aprs_msg(
-                source, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
+                sourcetrunc, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
             )
         elif qry == "help":
-            self.send_aprs_msg(sourcetrunc, "Valid cmds: NET+mesg,CQ+mesg,LIST,LAST,LOG,PING,?APRST,VERSION,TIME,HELP")
+            self.send_aprs_msg(sourcetrunc, "Valid cmds:NET +msg,CQ +msg,LIST,LAST,LOG,?APRST,ABOUT,TIME,HELP")
 
-# This logs a user's callsign into a temporary file called "netlog" which can be processed later on.
-# It also logs the inclued message into a cumulative list which can then be published somewhere.
-            
+# This part is the net checkin. It logs callsigns into a daily list, and it also logs all messages into a cumulative list posted on the web
+
         elif qry == "net":
            sourcetrunc = source.replace('*','')
-           with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as g:
-                data3 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
-                g.write(data3)
-                logger.info("Writing %s net message to netlog-msg", sourcetrunc)
-           file = open(filename1, 'r')
-           search_word = sourcetrunc
+# Checking if duplicate message
+# If not, write msg to temp file
+           if not args == open('/home/pi/ioreth/ioreth/ioreth/lastmsg').read():
+                  logger.info("Message is not exact duplicate, now logging" )
 
-            
-# This portion below checks if the callsign+ssid has been logged already. If it is, the callsign+ssid
-# is no longer processed so that there will be no duplications in the list (which can be unruly for APRS
-# messaging if too long. The message is still recorded in netlog-msg for publishing, though.
+                  with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as g:
+                       data3 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                       g.write(data3)
+                       logger.info("Writing %s net message to netlog text", sourcetrunc)
+# Checking if already in log
+           with open(filename1, 'r') as file:
+                 search_word = sourcetrunc
+                 if(search_word in file.read()):
+                      self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ +msg,LIST,LOG,LAST,HELP for cmds")
+                      logger.info("Checked if %s already logged to prevent duplicate. Skipping checkin", sourcetrunc)
+# If not in log, then add them
+                 else:
+                      with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as f:
+                         f.write(sourcetrunc)
+                         logger.info("Writing %s checkin to netlog", source)
+                      self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". U may msg all QRX-send CQ +text.LAST to review last5.")
+                      self.send_aprs_msg(sourcetrunc, "Msg LIST to view. Pls QRX for CQ msgs. aprs.dx1arm.net for info." )
+                      logger.info("Replying to %s checkin message", sourcetrunc)
 
-            if(search_word in file.read()):
-              self.send_aprs_msg(sourcetrunc, "Alrdy in log. QSL addnl msg. CQ+mesg,LOG,LIST,HELP for cmds")
-              logger.info("Checked if %s already logged to prevent duplicate", sourcetrunc)
-           else:
-                with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as f:
-                      f.write(sourcetrunc)
-                      logger.info("Writing %s checkin to netlog", source)
-                self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". U may msg all QRX by sending 'CQ' + text.")
-                self.send_aprs_msg(sourcetrunc, "LOG fr stns. LIST last 5msg. QRX for CQ msgs. aprs.dx1arm.net info.")
-                logger.info("Replying to %s checkin message", sourcetrunc)
-                if os.path.isfile(filename1):
-                      file = open(filename1, 'r')
-                      data2 = file.read()  
-                      file.close()
+# Record the message somewhere to check if next message is dupe
+           with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
+                lasttext = args
+                g.write(lasttext)
+                logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
 
-# This portion below returns a list of checkins for the day.  
-# WISHLIST/TODO: Find a way to split the message if it is too long for the 67-character APRS message limit.
-                        
-        elif qry == "list":
+
+        elif qry == "list" or qry == "?aprsd":
            if os.path.isfile(filename1):
                  file = open(filename1, 'r')
                  data2 = file.read()  
                  file.close()
                  self.send_aprs_msg(source, timestr + ": " + data2 )
-                 self.send_aprs_msg(source, "CQ +text to msg all log. LAST for 5 msgs Info aprs.dx1arm.net" )
+                 self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
                  logger.info("Replying with stations heard today: %s", data2)
-
-
            else:
-                 self.send_aprs_msg(source, "No stations have checked in yet. Send 'net' to checkin." ) 
-
-# CQ forwards message to all stations in the day's log. It retrieves the list of recipients from the day's
-# line-separated list, and parses these as the destination for the message. The "replace" function is due to the 
-# extra line space that is somehow added into each callsign, which previously caused malformed frames.
+                 self.send_aprs_msg(source, "No stations have checked in yet. NET +msg to checkin.") 
 
         elif qry == "cq":
            sourcetrunc = source.replace('*','')
-           if os.path.isfile(filename3):
-             lines = []
-             with open(filename3) as f:
-                  lines = f.readlines()
-             count = 0
-             for line in lines:
-                  count += 1
-# message prefix gives a somehow unique message id, which is important when sending multiple messages
-# to prevent ACK from another station inadvertently cancelling a message transmit.
-                  self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args )
-                  self.send_aprs_msg(line.replace('\n',''), "Reply 'CQ'+text to send all on today's list. 'Log' to view." )
-                  logger.info("Sending CQ message to %s", line)
-#                  time.sleep(10)
-# Wanted to add a time delay of XX seconds per station to prevent packet storms but apparently this is not the right place.
-# Apparently, I am trying the wrong place.
+# Checking if duplicate message
+           if not args == open('/home/pi/ioreth/ioreth/ioreth/lastmsg').read():
+                  logger.info("Message is not exact duplicate, now logging" )
 
+                  with open('/home/pi/ioreth/ioreth/ioreth/cqlog/cqmesg', 'w') as cqm:
+                       data9 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                       cqm.write(data9)
+                       logger.info("Writing %s CQ message to cqmesg", sourcetrunc)
+                       cqm.close
+
+# If no checkins, we will check you in and also post your CQ message into the CQ log, and also include in net log
+           if not os.path.isfile(filename3):
+               with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as nt:
+                   nt.write(sourcetrunc)
+                   logger.info("Writing %S message to netlog", sourcetrunc)
+# Checking if duplicate message
+               if not args == open('/home/pi/ioreth/ioreth/ioreth/lastmsg').read():
+                   logger.info("Message is not exact duplicate, now logging" )
+                   with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as ntg:
+                        data3 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                        ntg.write(data3)
+                        logger.info("Writing %s net message to netlog-msg", sourcetrunc)
+               self.send_aprs_msg(sourcetrunc, "No stations QRX  yet. Ur nw checked in today's log." ) 
+               logger.info("Advising %s to checkin", sourcetrunc)
+               return
+# If not yet in log, add them in and add their message to net log.
+           file = open(filename1, 'r')
+           search_word = sourcetrunc
+           if not (search_word in file.read()):
+                with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as cqf:
+                      cqf.write(sourcetrunc)
+                      logger.info("CQ source not yet in net. Writing %s checkin to netlog", source)
+                with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as ntg:
+                      data3 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                      ntg.write(data3)
+                      logger.info("Writing %s net message to netlog-msg", sourcetrunc)
+# Record the message somewhere to check if next message is dupe
+           with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
+                lasttext = args
+                g.write(lasttext)
+                logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
+
+# Send the message to all on the QRX list for today
+           lines = []
+           with open(filename3) as sendlist:
+                lines = sendlist.readlines()
+           count = 0
+           for line in lines:
+                count += 1
+                if not sourcetrunc == line.replace('\n',''):
+                      self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args)
+                      self.send_aprs_msg(line.replace('\n',''), "Reply CQ +text to send all on today's list. LIST to view." )
+                logger.info("Sending CQ message to %s except %s", line, sourcetrunc)
 # This reads the day's log from a line-separated list for processing one message at a time.
+# Advise sender their message is sent
+           daylog = open(filename1, 'r')
+           dayta2 = daylog.read() 
+           daylog.close()
+           dayta3 = dayta2.replace(sourcetrunc + ',','')
+           self.send_aprs_msg(source, "QSP " + dayta3 )
+           logger.info("Advising %s of messages sent to %s", sourcetrunc, dayta3)
 
-             file = open(filename1, 'r')
-             data2 = file.read()  
-             file.close()
-             self.send_aprs_msg(source, "QSP " + data2 )
-             logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
 
-           else:
-                  self.send_aprs_msg(sourcetrunc, "No stations have checked in yet. Send 'net' to checkin." ) 
-                  logger.info("Sending CQ message to %s", line)
-
-# This is for a certain list of permanent subscribers, which I have named DU. It's intended for emergency/tactical purposes only,
-# which includes stations in my nearby vicinity. In essence, it acts like "CQ" but the list is not refereshed every day.
-# I intend to copy this functionality to a group list that can be subscribed to like NET but does not expire every midnight.
+# This is for permanent subscribers in DU. Basically a fixed implementation of "CQ" but with subscribers not having any control.
+# Good for tactical uses, such as RF-only or off-grid environments.
 
         elif qry == "du":
              sourcetrunc = source.replace('*','')
@@ -251,14 +291,15 @@ class BotAprsHandler(aprs.Handler):
              count = 0
              for line in lines:
                   count += 1
+#                  mespre = (line[1:4])
                   self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args )
                   logger.info("Sending DU message to %s", line)
              file = open(dusubslist, 'r')
              data2 = file.read()  
              file.close()
-             self.send_aprs_msg(source, "Sent msg to " + count + " recipients. Ask N2RAC for list." )
+             self.send_aprs_msg(source, "Sent msg to DU recipients. Ask N2RAC for list." )
              logger.info("Advising %s of messages sent to %s", sourcetrunc, data2)
-
+#             file.close()
         elif qry == "last": 
              with open(cqlog) as netlast:
                   lasts = netlast.readlines()
@@ -268,33 +309,78 @@ class BotAprsHandler(aprs.Handler):
              count = 0
              for line in lastlines:
                   count +=1
-                  self.send_aprs_msg(sourcetrunc, line[24:91] )
+                  self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
                   logger.info("Sending last 5 cqlog messages to  %s", sourcetrunc)
-        elif qry == "log": 
+        elif qry == "log":
              with open(filename2) as netlast:
                   lasts = netlast.readlines()
                   lastlines = lasts[-5:]
                   netlast.close()
-             self.send_aprs_msg(sourcetrunc, "Last 5 NET chckins. NET +text to join,LIST for QRX,HELP for cmds." )
+             self.send_aprs_msg(sourcetrunc, "Last 5 NET msgs. NET +text to join,LIST for QRX,HELP for cmds." )
              count = 0
              for line in lastlines:
                   count +=1
-                  self.send_aprs_msg(sourcetrunc, line[24:91] )
+                  self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
                   logger.info("Sending last 5 netlog messages to  %s", sourcetrunc)
 
-            
-            
+# SMS handling for DU recipients. Note that this requires gammu-smsd daemon running on your local machine, with
+# the user having access to the SMS storage directories, as well as an extra folder called "processed" where
+# SMS inbox messages are moved once they are processed.
+
+        elif qry == "sms":
+
+# Check first if duplicate
+          sourcetrunc = source.replace('*','')
+          SMS_TEXT = ("APRS msg fr " + sourcetrunc + ":\n\n" + args[12:] + "\n\n-via DX1ARM-2\n\n@" + sourcetrunc + " plus short txt to reply." )
+          SMS_DESTINATION = args[0:11]
+          sendsms = ( "echo '" + SMS_TEXT + "' | gammu-smsd-inject TEXT " + SMS_DESTINATION )
+          if not args == open('/home/pi/ioreth/ioreth/ioreth/lastmsg').read():
+             logger.info("Received message for SMS that is not exact duplicate, now sending SMS" )
+
+             self.send_aprs_msg(sourcetrunc, "Sending SMS to: " + SMS_DESTINATION )
+             logger.info("Replying to %s that SMS to %s is being sent", sourcetrunc, SMS_DESTINATION)
+
+             with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
+                 lasttext = args
+                 g.write(lasttext)
+                 logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
+             sourcetrunc = source.replace('*','')
+
+# Validating the destination. In the Philippines, cell numbers start with 09XX. Adjust this accordingly.
+
+             if not SMS_DESTINATION[0:2] == "09":
+               self.send_aprs_msg(sourcetrunc, SMS_DESTINATION + " is not a valid PH no. Use 09XXXXXXXXX no dashes&spaces." )
+               logger.info("Replying to %s that %s is not a valid number.", sourcetrunc, SMS_DESTINATION)
+               return
+
+             try:
+                 os.system(sendsms)
+             except:
+                 self.send_aprs_msg(sourcetrunc, 'SMS Could not be sent')
+                 logger.info("Could not send SMS from %s to %s", sourcetrunc, SMS_DESTINATION)
+
+# This is necessary, since APRS messages may be sent or received multiple times (e.g., heard from another digipeater)
+# This ensures that the SMS being sent will not be doubled. When the same message is heared on this machine, processing
+# Stops already because the message has been queued by Gammu-smsd. Same case with other processes here.
+
+          else:
+             logger.info("SMS fromm %s to %s is a duplicate. No longer processing", sourcetrunc, SMS_DESTINATION)
+
         elif qry in random_replies:
             self.send_aprs_msg(source, random_replies[qry] )
+        elif qry == "bye" and source == "N2RAC-7":
+             self.send_aprs_msg(sourcetrunc, "bcnu" )
+             cmd = 'sudo shutdown --reboot'
+             os.system(cmd)
+        elif qry == "armbye" and ( source == "N2RAC-7" or "4I1RAC" or  "DW1YKX" ):
+             os.system('ssh pi-star@dx1armlink.local sudo shutdown --reboot')
+             self.send_aprs_msg(sourcetrunc, "wait" )
         else:
-            if is_br_callsign(source):
-                self.send_aprs_msg(
-                    source, "Sou um bot. Envie 'help' para a lista de comandos"
-                )
-            else:
-                self.send_aprs_msg(source, "'Net'+text to checkin,'Log' for QRX list,'Help' for cmds." )
-
-
+            self.send_aprs_msg(source, "NET +text to checkin,CQ +text grp msg,LIST to view,HELP for cmds." )
+            with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
+                lasttext = args
+                g.write(lasttext)
+                logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
 
     def send_aprs_msg(self, to_call, text):
         self._client.enqueue_frame(self.make_aprs_msg(to_call, text))
@@ -372,6 +458,9 @@ class ReplyBot(AprsClient):
 
     def on_disconnect(self):
         logger.warning("Disconnected! Will try again soon...")
+        recon = 'sudo systemctl restart ioreth'
+        os.system(recon)
+
 
     def on_recv_frame(self, frame):
         self._aprs.handle_frame(frame)
@@ -452,20 +541,53 @@ class ReplyBot(AprsClient):
                 logger.info("Posting bulletin: %s=%s", bln, text)
                 self._aprs.send_aprs_msg(bln, text)
 
+# These lines are for checking if there are SMS messages received. Maybe find a better place for it
+# but the bulletins portion of the code might be the best place, as there may be no need to poll
+# for new SMS every so often.
 
-# These lines are for maintaining the net logs. Basically the netlog file is just a temporary file for storing a single checkin.
-# APRS sends multiple tries, thus a callsign might be duplicated. So each "net" message overwrites this file, which is then processed
-# Into a comma-separated file (for replying to LOG messages) and a line-separated file (for processing CQ messages).
+        smsinbox = "/var/spool/gammu/inbox/"
+        smsfolder = os.listdir(smsinbox)
+        if len(smsfolder)>0:
+            for filename in os.listdir(smsinbox):
+                    smssender = filename[24:34]
+                    logger.info("Found message in SMS inboxed and processed.")
 
+                    smstxt = open(smsinbox + filename, 'r')
+                    smsread = smstxt.read()
+                    smsreceived = smsread.replace('\n',' ')
+                    smstxt.close()
+                    if smsreceived[0:1] == "@":
+                          callsig = smsreceived.split(' ', 1)[0]
+                          callsign = callsig.upper()
+                          smsbody = smsreceived.split(' ', 1)[1]
+                          if len(smsbody) > 50:
+                               smsbody1 = smsbody[0:50]
+                               smsbody2 = smsbody[50:]
+                               self._aprs.send_aprs_msg(callsign[1:], "0" + smssender + " 1/2:" + smsbody1)
+                               self._aprs.send_aprs_msg(callsign[1:], "2/2:" + smsbody2)
+                               self._aprs.send_aprs_msg(callsign[1:], "Send SMS 11digitcel# Message to reply to PH SMS.")
+                               logger.info("SMS too long to fit 1 APRS message. Splitting into 2.")
+                          else:
+                               self._aprs.send_aprs_msg(callsign[1:], "0" + smssender + ":" + smsbody)
+                               self._aprs.send_aprs_msg(callsign[1:], "Send SMS 11digitcel# Message to reply to PH SMS.")
+                               logger.info("SMS is in correct formt. Sending to %s.", callsign)
+                    else:
+                          sendsms = ( "echo 'Incorrect format.\n\n@CALSGN-SSID Message\n\nto send to an APRS recipient.' | gammu-smsd-inject TEXT 0" + smssender )
+                          os.system(sendsms)
+                    movecmd = ("sudo mv "+ smsinbox + filename + " /var/spool/gammu/processed")
+                    os.system(movecmd)
+                    logger.info("Cleaning up SMS inbox.")
+
+# These lines are for maintaining the net logs
         if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/netlog'):
            file = open('/home/pi/ioreth/ioreth/ioreth/netlog', 'r')
-           data2 = file.read()  
+           data20 = file.read()
            file.close()
            fout = open(filename1, 'a')
-           fout.write(data2)
+           fout.write(data20)
            fout.write(",")
            fout = open(filename3, 'a')
-           fout.write(data2)
+           fout.write(data20)
            fout.write("\n")
            logger.info("Copying latest checkin into day's net logs")
            os.remove('/home/pi/ioreth/ioreth/ioreth/netlog')
@@ -473,12 +595,10 @@ class ReplyBot(AprsClient):
            file = open(filename1, 'r')
            data5 = file.read()  
            file.close()
-            
-# These lines below send a bulletin update with the latest checkins.            
            self._aprs.send_aprs_msg("BLN8NET", timestr + ": " + data5)
-           self._aprs.send_aprs_msg("BLN9NET", "Full msg logs at http://aprs.dx1arm.net")
+           self._aprs.send_aprs_msg("BLN9NET", "Full logs at http://aprs.dx1arm.net & http://cq.dx1arm.net")
            logger.info("Sending new log text to BLN8NET after copying over to daily log")
-           return
+#           return
 
         if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/nettext'):
            file = open('/home/pi/ioreth/ioreth/ioreth/nettext', 'r')
@@ -487,10 +607,31 @@ class ReplyBot(AprsClient):
            fout = open('/home/pi/ioreth/ioreth/ioreth/netlog-msg', 'a')
            fout.write(data4)
            fout.write("\n")
+           fout.close()
            logger.info("Copying latest checkin message into cumulative net log")
            os.remove('/home/pi/ioreth/ioreth/ioreth/nettext')
            logger.info("Deleting net text scratch file")
-           return
+           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/netlog-msg root@radio1.dx1arm.net:/var/www/html/aprsnet'
+           os.system(cmd)
+           logger.info("Uploading logfile to the web")
+#           return
+
+        if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/cqlog/cqmesg'):
+           file = open('/home/pi/ioreth/ioreth/ioreth/cqlog/cqmesg', 'r')
+           datacq = file.read()  
+           file.close()
+           cqout = open('/home/pi/ioreth/ioreth/ioreth/cqlog/cqlog', 'a')
+           cqout.write(datacq)
+           cqout.write("\n")
+           cqout.close()
+           logger.info("Copying latest net or checkin message into cumulative CQ message log")
+           os.remove('/home/pi/ioreth/ioreth/ioreth/cqlog/cqmesg')
+           logger.info("Deleting CQ text file")
+           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/cqlog/cqlog root@radio1.dx1arm.net:/var/www/html/cqlog'
+           os.system(cmd)
+           logger.info("Uploading cq to the web")
+#           return
+
 
     def send_aprs_msg(self, to_call, text):
         self._client.enqueue_frame(self.make_aprs_msg(to_call, text))
@@ -540,3 +681,4 @@ class ReplyBot(AprsClient):
 
         if isinstance(cmd, SystemStatusCommand):
             self._aprs.send_aprs_status(cmd.status_str)
+
