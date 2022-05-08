@@ -48,9 +48,9 @@ Web: <https://www.ittner.com.br>
 
 
 
-# Additional notes from Angelo 4I1RAC/N2RAC
+# Additional notes from Angelo DU2XXR / N2RAC
 
-This fork of Ioreth was modified by Angelo 4I1RAC/N2RAC to support additional
+This fork of Ioreth was modified by Angelo DU2XXR / N2RAC to support additional
 functionalities, such as a means to store callsigns from a "net" checkin
 as well as a means to forward messages to all stations checked in for the day
 It is also supported by local cron jobs on my own machine and web server
@@ -66,6 +66,21 @@ rely on some weird or nuanced scripts or directory structures that I have
 maintained on my own machine or server, so bear with me.
 The non-indented comments are mine. The indented ones are by Alexandre.
 A lot of this is trial-and-error for me, so again, please bear with me.
+
+# Supported bot commands
+
+- *NET plus message* - This adds the user to the day's log (refreshes every midnight at the machine's local time). It also logs the timestamp, callsign, and message to a file that can be posted on the web. See http://aprs.dx1arm.net for example.
+- *CQ plus message* - This sends the message to all stations currently checked into the net. It also saves the timestamp, callsign, and message to a file that can be posted on the web. See http://cq.dx1arm.net for example.
+- *List* - returns a list of stations currently checked into the net.
+- *Log* - Returns the last 3 net checkins and their messages.
+- *Last* - Returns the last 3 CQ messages
+- *SMS XXXXXXXXXXX Message* - Sends a text message the the number XXXXXXXXXXX along with the message. This supports replies or new messages from SMS users. Currently, the script is for numbers in the Philippines, since that is where I operate.
+- *SMSALIAS XXXXXXXXXXX Message* - Sets an alias so that the SMS recipient/sender number will no longer appear in subsequent messages.
+- *?APRST* or *?PING?* returns the path taken by the user's current ping message to the bot. 
+- *TIME* returns the machine's current time.
+- *VERSION* returns the python version.
+- *HELP* returns a list of commands.
+- Commands to run server-side commands are also supported.
 
 # Contact information
 - Email: qsl@n2rac.com
