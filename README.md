@@ -69,20 +69,21 @@ A lot of this is trial-and-error for me, so again, please bear with me.
 
 # Supported bot commands
 
-- *NET plus message* - This adds the user to the day's log (refreshes every midnight at the machine's local time). It also logs the timestamp, callsign, and message to a file that can be posted on the web. See http://aprs.dx1arm.net for example.
-- *CQ plus message* - This sends the message to all stations currently checked into the net. It also saves the timestamp, callsign, and message to a file that can be posted on the web. See http://cq.dx1arm.net for example.
-- *List* - returns a list of stations currently checked into the net.
-- *Log* - Returns the last 3 net checkins and their messages.
-- *Last* - Returns the last 3 CQ messages
-- *SMS XXXXXXXXXXX Message* - Sends a text message the the number XXXXXXXXXXX along with the message. This supports replies or new messages from SMS users. Currently, the script is for numbers in the Philippines, since that is where I operate.
-- *SMSALIAS XXXXXXXXXXX Message* - Sets an alias so that the SMS recipient/sender number will no longer appear in subsequent messages.
-- *?APRST* or *?PING?* returns the path taken by the user's current ping message to the bot. 
-- *TIME* returns the machine's current time.
-- *VERSION* returns the python version.
-- *HELP* returns a list of commands.
+- **NET plus message** - This adds the user to the day's log (refreshes every midnight at the machine's local time). It also logs the timestamp, callsign, and message to a file that can be posted on the web. See http://aprs.dx1arm.net for example.
+- **CQ plus message** - This sends the message to all stations currently checked into the net. It also saves the timestamp, callsign, and message to a file that can be posted on the web. See http://cq.dx1arm.net for example.
+- **LIST** - returns a list of stations currently checked into the net.
+- **LOG** - Returns the last 3 net checkins and their messages.
+- **LAST** - Returns the last 3 CQ messages
+- **SMS XXXXXXXXXXX Message** - Sends a text message the the number XXXXXXXXXXX along with the message. This supports replies or new messages from SMS users by sending @CALLSIGN-SSID to the gateway number. Currently, the script is for numbers in the Philippines, since that is where I operate. This requires gammu-smsd daemon. Some modems might have issue processing received messages, but I have found that setting AT+CNMI to 1,2,0,0 works.
+- **SMSALIAS XXXXXXXXXXX Message** - Sets an alias so that the SMS recipient/sender number will no longer appear in subsequent messages.
+- **?APRST** or **?PING?** returns the path taken by the user's current ping message to the bot. 
+- **TIME** returns the machine's current time.
+- **VERSION** returns the python version.
+- **HELP** returns a list of commands.
 - Commands to run server-side commands are also supported.
 
 # Contact information
-- Email: qsl@n2rac.com
-- Telegram: jangelor
-- Web: <https://n2rac.com>
+- **Email**: qsl@n2rac.com
+- **Telegram**: jangelor
+- **Web**: <https://n2rac.com>
+- **APRS**: DU2XXR-7
