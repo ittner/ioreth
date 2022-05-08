@@ -18,7 +18,7 @@
 #
 # ========
 #
-# This fork of Ioreth was modified by Angelo 4I1RAC/N2RAC to support additional
+# This fork of Ioreth was modified by Angelo DU2XXR / N2RAC to support additional
 # functionalities, such as a means to store callsigns from a "net" checkin
 # as well as a means to forward messages to all stations checked in for the day
 # It is also supported by local cron jobs on my own machine and web server
@@ -27,7 +27,7 @@
 # Pardon my code. My knowledge is very rudimentary, and I only modify or create
 # functions as I need them. If anyone can help improve on the code and the
 # logic of this script, I would very much appreciate it.
-# You may reach me at qsl@n2rac.com or simply APRS message me at N2RAC-7.
+# You may reach me at qsl@n2rac.com or simply APRS message me at DU2XXRfDU-7.
 #
 # A lot of the items here are still poorly documented if at all. Many also
 # rely on some weird or nuanced scripts or directory structures that I have
@@ -330,10 +330,12 @@ class BotAprsHandler(aprs.Handler):
 # Let users set up SMS aliases. Be sure to create the paths yourself if not yet existent.
         elif qry == "smsalias":
              sourcetrunc = source.replace('*','')
+# Let's use an alias file with no SSID so that aliases can be used across different -SSIDs
+             callnossid = sourcetrunc.split('-', 1)[0]
              SMS_DESTINATION = args[0:11]
              SMS_ALIAS = args[12:]
-             aliasscratch = "/home/pi/ioreth/ioreth/ioreth/smsaliasscratch/" + sourcetrunc
-             aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + sourcetrunc
+             aliasscratch = "/home/pi/ioreth/ioreth/ioreth/smsaliasscratch/" + callnossid
+             aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + callnossid
 # stop processing duplicates, since APRS sends messages multiple times.
              if not os.path.isfile(aliasscratch):
                  aliases = open(aliasscratch, 'w')
@@ -341,7 +343,7 @@ class BotAprsHandler(aprs.Handler):
                  logger.info("Already processed alias for %s %s recently. No longer processing.", SMS_DESTINATION, SMS_ALIAS)
                  return
              if not args[0:2] == "09":
-                 self.send_aprs_msg(sourcetrunc, "SMSALIAS name to set. SMS name to send thereafter.")
+                 self.send_aprs_msg(sourcetrunc, "SMSALIAS 09XXXXXXXXX name to set. SMS NAME to send thereafter.")
                  return
              if not os.path.isfile(aliasscratch):
                  aliases = open(aliasscratch, 'w')
@@ -360,14 +362,14 @@ class BotAprsHandler(aprs.Handler):
 # the user having access to the SMS storage directories, as well as an extra folder called "processed" where
 # SMS inbox messages are moved once they are processed.
         elif qry == "sms":
-
           sourcetrunc = source.replace('*','')
+          callnossid = sourcetrunc.split('-', 1)[0]
           SMS_TEXT = ("APRS msg fr " + sourcetrunc + " via DX1ARM-2:\n\n" + args.split(' ', 1)[1] + "\n\n@" + sourcetrunc + " plus ur msg to reply. APRS MSGs ARE NOT PRIVATE!" )
 # First set the characters after SMS as the initial destination
           SMS_DESTINATION = args[0:11]
 # First check if using alias or not
           aliasfound = []
-          aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + sourcetrunc
+          aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + callnossid
           smsoralias = args.split(' ', 1)[0]
           if not os.path.isfile(aliasfile):
                 SMS_DESTINATION = args[0:11]
@@ -416,7 +418,7 @@ class BotAprsHandler(aprs.Handler):
              try:
 #                   os.system(sendsms)
                    self.send_aprs_msg(sourcetrunc, "SMS " + smsoralias +" -sending. Note: APRS msgs not private." )
-                   aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + sourcetrunc
+                   aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + callnossid
                    smsoralias = args.split(' ', 1)[0]
                    if not os.path.isfile(aliasfile):
                          self.send_aprs_msg(sourcetrunc, "U may use alias.SMSALIAS 09XXXXXXXXX NAME to set.SMS NAME to send.")
@@ -436,7 +438,6 @@ class BotAprsHandler(aprs.Handler):
 
         elif qry in random_replies:
             self.send_aprs_msg(sourcetrunc, random_replies[qry] )
-
 # These lines are for executing certain commands on the server, such as rebooting, etc.
 # Make sure the account has sufficient privileges!
 
@@ -651,13 +652,14 @@ class ReplyBot(AprsClient):
                       if smsreceived[0:1] == "@":
                           callsig = smsreceived.split(' ', 1)[0]
                           callsign = callsig.upper()
+                          callnossid = callsign.split('-', 1)[0]
                           smsbody = smsreceived.split(' ', 1)[1]
 # Let's check if the sender has an alias, and if so we use that instead of the number for privacy.
                           aliaspath = "/home/pi/ioreth/ioreth/ioreth/smsalias/"
-                          aliascheck = aliaspath + callsign[1:]
+                          aliascheck = aliaspath + callnossid[1:]
                           if not os.path.isfile(aliascheck):
                                smssender = "0" + smsnumber
-                               logger.info("No alias file found at %s%s, just use number.", aliaspath, callsign[1:] )
+                               logger.info("No alias file found at %s%s, just use number.", aliaspath, callnossid[1:] )
                                smsalias = 0
                           else:
                                logger.info("Alias file found, trying to match '%s' to an alias.",smsnumber )
@@ -704,11 +706,16 @@ class ReplyBot(AprsClient):
                           if smsalias == 1:
                                sendsms = ( "echo 'Ur APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           else:
-                               sendsms = ( "echo 'Ur APRS msg to " + callsign[1:] + " has been sent. By using gateway, u agree ur # & msg may appear on APRS-IS online services. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT " + smssender )
+                               sendsms = ( "echo 'Ur APRS msg to " + callsign[1:] + " has been sent. By using gateway, u agree ur # & msg may appear on APRS-IS online services. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           logger.info("Sending %s a confirmation message that APRS message has been sent.", smssender)
                           os.system(sendsms)
                       else:
-                          sendsms = ( "echo 'Incorrect format.Use: \n\n@CALSGN-SSID Message\n\nto text APRS user. Must have @ before CS. 1/2-digit SSID optional if none.' | gammu-smsd-inject TEXT 0" + smssender )
+#                          if smsalias == 1:
+                          sendsms = ( "echo 'Incorrect format.Use: \n\n@CALSGN-SSID Message\n\nto text APRS user. Must have @ before CS. 1/2-digit SSID optional if none.' | gammu-smsd-inject TEXT 0" + smsnumber )
+#                          else:
+#                                sendsms = ( "echo 'Incorrect format.Use: \n\n@CALSGN-SSID Message\n\nto text APRS user. Must have @ before CS. 1/2-digit SSID optional if none.' | gammu-smsd-inject TEXT 0" + smsnumber )
+
+
                           os.system(sendsms)
                     movecmd = ("sudo mv "+ smsinbox + filename + " /var/spool/gammu/processed")
                     os.system(movecmd)
