@@ -29,7 +29,7 @@ class Handler:
     """
 
     DEFAULT_PATH = "WIDE1-1,WIDE2-2"
-    DEFAULT_DESTINATION = "APRS"
+    DEFAULT_DESTINATION = "APZIOR"
 
     def __init__(self, callsign="XX0ABC"):
         self.callsign = callsign
