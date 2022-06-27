@@ -18,7 +18,7 @@
 #
 # ========
 #
-# This fork of Ioreth was modified by Angelo DU2XXR / N2RAC to support additional
+# This fork of Ioreth was modified by Angelo 4I1RAC/N2RAC to support additional
 # functionalities, such as a means to store callsigns from a "net" checkin
 # as well as a means to forward messages to all stations checked in for the day
 # It is also supported by local cron jobs on my own machine and web server
@@ -27,7 +27,7 @@
 # Pardon my code. My knowledge is very rudimentary, and I only modify or create
 # functions as I need them. If anyone can help improve on the code and the
 # logic of this script, I would very much appreciate it.
-# You may reach me at qsl@n2rac.com or simply APRS message me at DU2XXRfDU-7.
+# You may reach me at qsl@n2rac.com or simply APRS message me at N2RAC-7.
 #
 # A lot of the items here are still poorly documented if at all. Many also
 # rely on some weird or nuanced scripts or directory structures that I have
@@ -144,6 +144,10 @@ class BotAprsHandler(aprs.Handler):
             "73": "73 🖖",
         }
 
+        if sourcetrunc == "DX1ARM-2":
+                  logger.info("Message from self. Stop processing." )
+                  return
+
         if qry == "ping":
             self.send_aprs_msg(sourcetrunc, "Pong! " + args )
         elif qry == "?aprst" or qry == "?ping?":
@@ -166,7 +170,7 @@ class BotAprsHandler(aprs.Handler):
 
 # This part is the net checkin. It logs callsigns into a daily list, and it also logs all messages into a cumulative list posted on the web
 
-        elif qry == "net":
+        elif qry == "net" or qry == "checking" or qry == "checkin" or qry == "joining" or qry == "join" or qry == "hi" or qry =="hello" :
            sourcetrunc = source.replace('*','')
 # Checking if duplicate message
 # If not, write msg to temp file
@@ -205,13 +209,23 @@ class BotAprsHandler(aprs.Handler):
                 g.close()
 
         elif qry == "list" or qry == "?aprsd":
+           timestrtxt = time.strftime("%m%d")
            if os.path.isfile(filename1):
                  file = open(filename1, 'r')
-                 data2 = file.read()  
+                 data21 = file.read()
+                 data2 = data21.replace('\n','')
                  file.close()
-                 self.send_aprs_msg(source, timestr + ": " + data2.replace('\n','') )
-                 self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
-                 logger.info("Replying with stations heard today: %s", data2.replace('\n','') )
+                 if len(data2) > 62:
+                       listbody1 = data2[0:58]
+                       listbody2 = data2[58:]
+                       self.send_aprs_msg(source, timestrtxt + " 1/2:" + listbody1 )
+                       self.send_aprs_msg(source, "2/2:" + listbody2 )
+                       self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
+                       logger.info("Replying with stations heard today. Exceeded length so split into 2: %s", data2 )
+                 else:
+                       self.send_aprs_msg(source, timestrtxt + ":" + data2 )
+                       self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
+                       logger.info("Replying with stations heard today: %s", data2 )
            else:
                  self.send_aprs_msg(source, "No stations have checked in yet. NET +msg to checkin.") 
 
@@ -265,11 +279,12 @@ class BotAprsHandler(aprs.Handler):
                 lines = sendlist.readlines()
            count = 0
            for line in lines:
+                linetrunc = line.replace('\n','')
                 count += 1
-                if not sourcetrunc == line.replace('\n',''):
-                      self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args)
-                      self.send_aprs_msg(line.replace('\n',''), "Reply CQ +text to send all on today's list. LIST to view." )
-                logger.info("Sending CQ message to %s except %s", line, sourcetrunc)
+                if not sourcetrunc == linetrunc:
+                      self.send_aprs_msg(linetrunc, sourcetrunc + ">" + args)
+                      self.send_aprs_msg(linetrunc, "Reply CQ +text to send all on today's list. LIST to view." )
+                logger.info("Sending CQ message to %s except %s", linetrunc, sourcetrunc)
 # This reads the day's log from a line-separated list for processing one message at a time.
 # Advise sender their message is sent
            daylog = open(filename1, 'r')
@@ -327,10 +342,10 @@ class BotAprsHandler(aprs.Handler):
                   logger.info("Sending last 3 netlog messages to  %s", sourcetrunc)
 
 
+
 # Let users set up SMS aliases. Be sure to create the paths yourself if not yet existent.
-        elif qry == "smsalias":
+        elif qry == "smsalias" or qry == "setalias":
              sourcetrunc = source.replace('*','')
-# Let's use an alias file with no SSID so that aliases can be used across different -SSIDs
              callnossid = sourcetrunc.split('-', 1)[0]
              SMS_DESTINATION = args[0:11]
              SMS_ALIAS = args[12:]
@@ -366,16 +381,40 @@ class BotAprsHandler(aprs.Handler):
           callnossid = sourcetrunc.split('-', 1)[0]
           SMS_TEXT = ("APRS msg fr " + sourcetrunc + " via DX1ARM-2:\n\n" + args.split(' ', 1)[1] + "\n\n@" + sourcetrunc + " plus ur msg to reply. APRS MSGs ARE NOT PRIVATE!" )
 # First set the characters after SMS as the initial destination
-          SMS_DESTINATION = args[0:11]
+          SMS_DESTINATION = ""
+#          SMS_DESTINATION = args[0:11]
 # First check if using alias or not
           aliasfound = []
           aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + callnossid
+          cellaliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/CELLULAR"
           smsoralias = args.split(' ', 1)[0]
-          if not os.path.isfile(aliasfile):
-                SMS_DESTINATION = args[0:11]
-                logger.info("No alias file found, just sending to number." )
-          else:
-              logger.info("Alias file found, trying to match '%s' to a number.",smsoralias )
+          smsoraliasupper = smsoralias.upper()
+# Check cellular-initiated aliases first
+          with open(cellaliasfile, 'r') as file:
+               lines = file.readlines()
+          count = 0
+          for line in lines:
+                          count += 1
+                          names = line.replace('\n','')
+                          names2 = names[12:]
+                          logger.info("Trying to match '%s' with '%s'.", smsoralias, names2.upper() )
+                          if smsoraliasupper == names2.upper():
+                             SMS_DESTINATION = line[0:11]
+                             logger.info("Self-set alias found for %s as %s.", smsoralias, SMS_DESTINATION )
+
+# If Alias file is present, then APRS-initiated alias takes precedence
+
+          if os.path.isfile(aliasfile):
+#                SMS_DESTINATION = args[0:11]
+#                logger.info("No alias file found, just sending to number." )
+#          else:
+
+
+
+
+
+
+              logger.info("Callsign's own alias file found, trying to match '%s' to a number.",smsoralias )
               lines = []
               with open(aliasfile, 'r') as file:
                     lines = file.readlines()
@@ -383,10 +422,16 @@ class BotAprsHandler(aprs.Handler):
               for line in lines:
                           count += 1
                           names = line.replace('\n','')
-                          logger.info("Trying to match '%s' with '%s'.", smsoralias, names )
-                          if smsoralias == names[12:]:
+                          names2 = names[12:]
+                          logger.info("Trying to match '%s' with '%s'.", smsoralias, names2.upper() )
+                          if smsoraliasupper == names2.upper():
                              SMS_DESTINATION = line[0:11]
                              logger.info("Alias found for %s as %s.", smsoralias, SMS_DESTINATION )
+
+          if SMS_DESTINATION == "":
+                SMS_DESTINATION = args[0:11]
+                logger.info("No alias file found, just sending to number." )
+
 # establish our SMS message
 
           sendsms = ( "echo '" + SMS_TEXT + "' | gammu-smsd-inject TEXT " + SMS_DESTINATION )
@@ -438,6 +483,7 @@ class BotAprsHandler(aprs.Handler):
 
         elif qry in random_replies:
             self.send_aprs_msg(sourcetrunc, random_replies[qry] )
+
 # These lines are for executing certain commands on the server, such as rebooting, etc.
 # Make sure the account has sufficient privileges!
 
@@ -458,7 +504,6 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "YOURCOMMAND2" and ( source == "CALLSIGN1" or "CALLSIGN2" or  "CALLSIGN3" ):
              os.system('ssh user@otherserver sudo shutdown --reboot')
              self.send_aprs_msg(sourcetrunc, "ttfn" )
-
 
         else:
             self.send_aprs_msg(sourcetrunc, "NET +text to checkin,CQ +text grp msg,LIST to view,HELP for cmds." )
@@ -481,14 +526,35 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
         self.status_str = ""
 
     def run(self):
+# These lines count the number of SMS sent and received
+        smsproc = "ls -l /var/spool/gammu/processed | grep total > /home/pi/ioreth/ioreth/ioreth/smsrxcount"
+        smsrxcount = os.system(smsproc)
+        smssent = "ls -l /var/spool/gammu/sent | grep total > /home/pi/ioreth/ioreth/ioreth/smstxcount"
+        smstxcount = os.system(smssent)
+        
+
+        smsrxnum = open('/home/pi/ioreth/ioreth/ioreth/smsrxcount', 'r')
+        smsrxcounts = smsrxnum.read()
+        smsrxtotals1 = smsrxcounts.replace('total ','')
+        smsrxtotals = smsrxtotals1.replace('\n','')
+        smsrxnum.close()
+
+        smstxnum = open('/home/pi/ioreth/ioreth/ioreth/smstxcount', 'r')
+        smstxcounts = smstxnum.read()
+        smstxtotals1 = smstxcounts.replace('total ','')
+        smstxtotals = smstxtotals1.replace('\n','')
+        smstxnum.close()
+
         net_status = (
             self._check_host_scope("Link", "eth_host")
             + self._check_host_scope("YSF", "inet_host")
             + self._check_host_scope("VHF", "dns_host")
             + self._check_host_scope("VPN", "vpn_host")
         )
-        self.status_str = "Msg NET to checkin. HELP for commands. Uptime %s" % (
+        self.status_str = "NET to checkin.HELP 4 cmds.SMS R%s T%s Up:%s" % (
 #            time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+            smsrxtotals,
+            smstxtotals,
             utils.human_time_interval(utils.get_uptime()),
         )
         if len(net_status) > 0:
@@ -592,6 +658,7 @@ class ReplyBot(AprsClient):
             # in the first seconds following a minute. It will, of course,
             # still run within the minute.
             timestr = time.strftime("%Y%m%d")
+            timestrtxt = time.strftime("%m%d")
             filename1 = "/home/pi/ioreth/ioreth/ioreth/netlog-"+timestr
 
             self._last_cron_blns = 60 * int(now_time / 60.0) + random.randint(0, 30)
@@ -632,24 +699,47 @@ class ReplyBot(AprsClient):
 
         smsinbox = "/var/spool/gammu/inbox/"
         smsfolder = os.listdir(smsinbox)
+        smsinbox = "/var/spool/gammu/inbox/"
+        smsfolder = os.listdir(smsinbox)
         smsalias = 0
         if len(smsfolder)>0:
             for filename in os.listdir(smsinbox):
                     smsnumber = filename[24:34]
                     smssender = "0"+smsnumber
-                    logger.info("Found message in SMS inboxed and processed.")
+                    logger.info("Found message in SMS inbox. Now processing.")
                     smsalias = "none"
                     smstxt = open(smsinbox + filename, 'r')
                     smsread = smstxt.read()
                     smsreceived = smsread.replace('\n',' ')
                     smstxt.close()
                     prefix = filename[22:25]
+                    smsstart = smsreceived.split(' ',1)[0]
+                    smsstartupper = smsstart.upper()
+# Ignore if from self
+                    if smssender == "09760685303":
+                       logger.info("Found message from self. Removing.")
+                       movespam = ("sudo rm "+ smsinbox + filename)
+                       os.system(movespam)
+                       return
+
                     if not prefix == "639":
                                logger.info("Possibly a carrier message or spam from %s. No longer processing", smssender )
                                movespam = ("sudo mv "+ smsinbox + filename + " /var/spool/gammu/spam")
                                os.system(movespam)
                     else:
-                      if smsreceived[0:1] == "@":
+# Let cell user create an alias
+                      
+                      if smsstartupper == "ALIAS":
+                          cellaliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/CELLULAR"
+                          cellownalias = smsreceived.split(' ', 1)[1]
+                          aliastext = smssender + " " + cellownalias
+                          with open(cellaliasfile, 'a') as makealias:
+                              writealias = "{} {}\n".format(smssender, cellownalias)
+                              makealias.write(writealias)
+                          sendsms = ( "echo 'U have set ur own alias as " + cellownalias + ". Ur # will not appear on APRS msgs. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                          os.system(sendsms)
+                          logger.info("Self-determined alias set for for %s as %s.", smsnumber, cellownalias )
+                      elif smsreceived[0:1] == "@":
                           callsig = smsreceived.split(' ', 1)[0]
                           callsign = callsig.upper()
                           callnossid = callsign.split('-', 1)[0]
@@ -657,9 +747,26 @@ class ReplyBot(AprsClient):
 # Let's check if the sender has an alias, and if so we use that instead of the number for privacy.
                           aliaspath = "/home/pi/ioreth/ioreth/ioreth/smsalias/"
                           aliascheck = aliaspath + callnossid[1:]
+                          cellaliascheck = aliaspath + "CELLULAR"
+# Let's check if the sender has a self-assigned alias
+                          lines = []
+                          cellsmsalias = 0
+                          with open(cellaliascheck, 'r') as file:
+                              lines = file.readlines()
+                          count = 0
+                          for line in lines:
+                              count += 1
+                              names = line.replace('\n','')
+                              alias = names[12:]
+                              logger.info("Trying to match '%s' with '%s'.", smsnumber, names )
+                              if smsnumber == names[1:11]:
+                                    smssender = alias
+                                    cellsmsalias = 1
+                                    logger.info("Self-determined alias found for %s as %s.", smsnumber, alias )
+# But, the CALLSIGN's own alias file takes precedence over self-determined aliases, so check this also.
                           if not os.path.isfile(aliascheck):
-                               smssender = "0" + smsnumber
-                               logger.info("No alias file found at %s%s, just use number.", aliaspath, callnossid[1:] )
+#                               smssender = "0" + smsnumber
+                               logger.info("No alias file found at %s%s, using SMS-defined alias or number.", aliaspath, callnossid[1:] )
                                smsalias = 0
                           else:
                                logger.info("Alias file found, trying to match '%s' to an alias.",smsnumber )
@@ -703,15 +810,15 @@ class ReplyBot(AprsClient):
                                self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + ":" + smsbody)
                                self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender+ " Message to send/reply to PH SMS.")
                                logger.info("SMS is in correct format. Sending to %s.", callsign)
-                          if smsalias == 1:
-                               sendsms = ( "echo 'Ur APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                          if smsalias == 1 or cellsmsalias == 1:
+                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           else:
-                               sendsms = ( "echo 'Ur APRS msg to " + callsign[1:] + " has been sent. By using gateway, u agree ur # & msg may appear on APRS-IS online services. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " sent. Ur # & msg may appear on online services. Send ALIAS yourname to set an alias. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           logger.info("Sending %s a confirmation message that APRS message has been sent.", smssender)
                           os.system(sendsms)
                       else:
 #                          if smsalias == 1:
-                          sendsms = ( "echo 'Incorrect format.Use: \n\n@CALSGN-SSID Message\n\nto text APRS user. Must have @ before CS. 1/2-digit SSID optional if none.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                          sendsms = ( "echo 'To text APRS user: \n\n@CALSGN-SSID Message\n\nMust hv @ b4 CS (SSID optional if none). To set ur alias & mask ur cell#:\n\nALIAS myname\n\naprs.dx1arm.net for info.' | gammu-smsd-inject TEXT 0" + smsnumber )
 #                          else:
 #                                sendsms = ( "echo 'Incorrect format.Use: \n\n@CALSGN-SSID Message\n\nto text APRS user. Must have @ before CS. 1/2-digit SSID optional if none.' | gammu-smsd-inject TEXT 0" + smsnumber )
 
@@ -735,12 +842,19 @@ class ReplyBot(AprsClient):
            logger.info("Copying latest checkin into day's net logs")
            os.remove('/home/pi/ioreth/ioreth/ioreth/netlog')
            logger.info("Deleting net log scratch file")
+           timestrtxt = time.strftime("%m%d")
            file = open(filename1, 'r')
            data5 = file.read()  
            file.close()
-           self._aprs.send_aprs_msg("BLN8NET", timestr + ":" + data5)
+           if len(data5) > 58:
+                       listbody1 = data5[0:58]
+                       listbody2 = data5[58:]
+                       self._aprs.send_aprs_msg("BLN7NET", timestrtxt + " 1/2:" + listbody1)
+                       self._aprs.send_aprs_msg("BLN8NET", "2/2:" + listbody2 )
+           else:
+                       self._aprs.send_aprs_msg("BLN7NET", timestrtxt + ":" + data5)
            self._aprs.send_aprs_msg("BLN9NET", "Full logs at http://aprs.dx1arm.net & http://cq.dx1arm.net")
-           logger.info("Sending new log text to BLN8NET after copying over to daily log")
+           logger.info("Sending new log text to BLN7NET to BLN8NET after copying over to daily log")
 
         if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/nettext'):
            file = open('/home/pi/ioreth/ioreth/ioreth/nettext', 'r')
