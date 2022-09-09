@@ -18,7 +18,7 @@
 #
 # ========
 #
-# This fork of Ioreth was modified by Angelo 4I1RAC/N2RAC to support additional
+# This fork of Ioreth was modified by Angelo N2RAC/DU2XXR to support additional
 # functionalities, such as a means to store callsigns from a "net" checkin
 # as well as a means to forward messages to all stations checked in for the day
 # It is also supported by local cron jobs on my own machine and web server
@@ -27,7 +27,7 @@
 # Pardon my code. My knowledge is very rudimentary, and I only modify or create
 # functions as I need them. If anyone can help improve on the code and the
 # logic of this script, I would very much appreciate it.
-# You may reach me at qsl@n2rac.com or simply APRS message me at N2RAC-7.
+# You may reach me at qsl@n2rac.com or simply APRS message me at DU2XXR-7.
 #
 # A lot of the items here are still poorly documented if at all. Many also
 # rely on some weird or nuanced scripts or directory structures that I have
@@ -35,7 +35,7 @@
 # The non-indented comments are mine. The indented ones are by Alexandre.
 # A lot of this is trial-and-error for me, so again, please bear with me.
 #
-#
+# 2022-09-10 0123H +8
 
 import sys
 import time
@@ -144,7 +144,7 @@ class BotAprsHandler(aprs.Handler):
             "73": "73 🖖",
         }
 
-        if sourcetrunc == "DX1ARM-2":
+        if sourcetrunc == "APRSPH":
                   logger.info("Message from self. Stop processing." )
                   return
 
@@ -160,7 +160,7 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "version":
             self.send_aprs_msg(sourcetrunc, "Python " + sys.version.replace("\n", " "))
         elif qry == "about":
-            self.send_aprs_msg(sourcetrunc, "APRS bot by N2RAC/4I1RAC based on ioreth by PP5ITT. aprs.dx1arm.net" )
+            self.send_aprs_msg(sourcetrunc, "APRS bot by N2RAC/DU2XXR based on ioreth by PP5ITT. aprs.dx1arm.net" )
         elif qry == "time":
             self.send_aprs_msg(
                 sourcetrunc, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -295,7 +295,6 @@ class BotAprsHandler(aprs.Handler):
            self.send_aprs_msg(source, "QSP " + dayta3 )
            logger.info("Advising %s of messages sent to %s", sourcetrunc, dayta3)
 
-
 # This is for permanent subscribers in your QST list. 
 # Basically a fixed implementation of "CQ" but with subscribers not having any control.
 # Good for tactical uses, such as RF-only or off-grid environments.
@@ -310,7 +309,7 @@ class BotAprsHandler(aprs.Handler):
                   count += 1
 #                  mespre = (line[1:4])
                   self.send_aprs_msg(line.replace('\n',''), sourcetrunc + "/" + args )
-                  logger.info("Sending DU message to %s", line)
+                  logger.info("Sending QST message to %s", line)
              file = open(dusubslist, 'r')
              data21 = file.read()  
              data2 = data21.replace('\n','')
@@ -340,7 +339,6 @@ class BotAprsHandler(aprs.Handler):
                   count +=1
                   self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
                   logger.info("Sending last 3 netlog messages to  %s", sourcetrunc)
-
 
 
 # Let users set up SMS aliases. Be sure to create the paths yourself if not yet existent.
@@ -379,7 +377,7 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "sms":
           sourcetrunc = source.replace('*','')
           callnossid = sourcetrunc.split('-', 1)[0]
-          SMS_TEXT = ("APRS msg fr " + sourcetrunc + " via DX1ARM-2:\n\n" + args.split(' ', 1)[1] + "\n\n@" + sourcetrunc + " plus ur msg to reply. APRS MSGs ARE NOT PRIVATE!" )
+          SMS_TEXT = ("APRS msg fr " + sourcetrunc + " via APRSPH:\n\n" + args.split(' ', 1)[1] + "\n\n@" + sourcetrunc + " plus ur msg to reply. APRS MSGs ARE NOT PRIVATE!" )
 # First set the characters after SMS as the initial destination
           SMS_DESTINATION = ""
 #          SMS_DESTINATION = args[0:11]
@@ -505,6 +503,8 @@ class BotAprsHandler(aprs.Handler):
              os.system('ssh user@otherserver sudo shutdown --reboot')
              self.send_aprs_msg(sourcetrunc, "ttfn" )
 
+
+
         else:
             self.send_aprs_msg(sourcetrunc, "NET +text to checkin,CQ +text grp msg,LIST to view,HELP for cmds." )
             with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
@@ -551,11 +551,11 @@ class SystemStatusCommand(remotecmd.BaseRemoteCommand):
             + self._check_host_scope("VHF", "dns_host")
             + self._check_host_scope("VPN", "vpn_host")
         )
-        self.status_str = "NET to checkin.HELP 4 cmds.SMS R%s T%s Up:%s" % (
+        self.status_str = "NET to checkin.HELP 4 cmds.SMS R%s T%s DU2XXR" % (
 #            time.strftime("%Y-%m-%d %H:%M:%S %Z"),
             smsrxtotals,
             smstxtotals,
-            utils.human_time_interval(utils.get_uptime()),
+#            utils.human_time_interval(utils.get_uptime()),
         )
         if len(net_status) > 0:
             self.status_str += "," + net_status
@@ -731,7 +731,12 @@ class ReplyBot(AprsClient):
                       
                       if smsstartupper == "ALIAS":
                           cellaliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/CELLULAR"
-                          cellownalias = smsreceived.split(' ', 1)[1]
+                          isbodyalias = len(smsreceived.split())
+                          if isbodyalias > 1 :
+                              cellownalias = smsreceived.split(' ', 1)[1]
+                              logger.info("Alias body found. Setting self alias")
+                          else:
+                              cellownalias = ""
                           aliastext = smssender + " " + cellownalias
                           with open(cellaliasfile, 'a') as makealias:
                               writealias = "{} {}\n".format(smssender, cellownalias)
@@ -739,11 +744,19 @@ class ReplyBot(AprsClient):
                           sendsms = ( "echo 'U have set ur own alias as " + cellownalias + ". Ur # will not appear on APRS msgs. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           os.system(sendsms)
                           logger.info("Self-determined alias set for for %s as %s.", smsnumber, cellownalias )
+
+
                       elif smsreceived[0:1] == "@":
                           callsig = smsreceived.split(' ', 1)[0]
                           callsign = callsig.upper()
                           callnossid = callsign.split('-', 1)[0]
-                          smsbody = smsreceived.split(' ', 1)[1]
+                          isbody = len(smsreceived.split())
+                          if isbody > 1 :
+                              smsbody = smsreceived.split(' ', 1)[1]
+                              logger.info("Message body found. Sending message")
+                          else:
+                              smsbody = "EMPTY MSG BODY"
+                              logger.info("Message body not found. Sending empty")
 # Let's check if the sender has an alias, and if so we use that instead of the number for privacy.
                           aliaspath = "/home/pi/ioreth/ioreth/ioreth/smsalias/"
                           aliascheck = aliaspath + callnossid[1:]
