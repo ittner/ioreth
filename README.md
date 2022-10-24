@@ -67,6 +67,10 @@ maintained on my own machine or server, so bear with me.
 The non-indented comments are mine. The indented ones are by Alexandre.
 A lot of this is trial-and-error for me, so again, please bear with me.
 
+The net currently runs at <https://aprsph.net>. You may interact with the bot by sending APRS messages with APRSPH as the addressee.
+
+The group chat/CQ log is at <https://aprsph.net/cq>.
+
 # Supported bot commands
 
 - **NET plus message** - This adds the user to the day's log (refreshes every midnight at the machine's local time). It also logs the timestamp, callsign, and message to a file that can be posted on the web. See http://aprs.dx1arm.net for example.
