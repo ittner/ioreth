@@ -35,7 +35,7 @@
 # The non-indented comments are mine. The indented ones are by Alexandre.
 # A lot of this is trial-and-error for me, so again, please bear with me.
 #
-# 2022-09-10 0123H +8
+# 2022-10-23 1500H
 
 import sys
 import time
@@ -160,13 +160,13 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "version":
             self.send_aprs_msg(sourcetrunc, "Python " + sys.version.replace("\n", " "))
         elif qry == "about":
-            self.send_aprs_msg(sourcetrunc, "APRS bot by N2RAC/DU2XXR based on ioreth by PP5ITT. aprs.dx1arm.net" )
+            self.send_aprs_msg(sourcetrunc, "APRS bot by N2RAC/DU2XXR based on ioreth by PP5ITT. aprsph.net" )
         elif qry == "time":
             self.send_aprs_msg(
                 sourcetrunc, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
             )
         elif qry == "help":
-            self.send_aprs_msg(sourcetrunc, "NET +msg,CQ +msg,LIST,LAST,LOG,?APRST,SMS ### +msg,ABOUT,TIME,HELP")
+            self.send_aprs_msg(sourcetrunc, "NET +msg,CQ +msg,LIST,LAST,LOG,?APRST,SMS NNN +msg,ABOUT,TIME,HELP")
 
 # This part is the net checkin. It logs callsigns into a daily list, and it also logs all messages into a cumulative list posted on the web
 
@@ -197,8 +197,8 @@ class BotAprsHandler(aprs.Handler):
                       if args == "":
                          self.send_aprs_msg(sourcetrunc, "U may add txt aftr NET.CQ +text grp.LAST rvw last3.LIST view QRXlist.")
                       else:
-                         self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ". CQ +text grpchat.LAST review last3.LIST view QRXlist.")
-                      self.send_aprs_msg(sourcetrunc, "Pls QRX for CQ msgs. Net renews @1600Z. aprs.dx1arm.net for info." )
+                         self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + ":CQ +text grpchat.LAST/LOG view last3.LIST for  QRXlist.")
+                      self.send_aprs_msg(sourcetrunc, "Pls QRX for CQ msgs. Net renews @1600Z. aprsph.net for info." )
                       logger.info("Replying to %s checkin message", sourcetrunc)
 
 # Record the message somewhere to check if next message is dupe
@@ -209,28 +209,50 @@ class BotAprsHandler(aprs.Handler):
                 g.close()
 
         elif qry == "list" or qry == "?aprsd":
+           sourcetrunc = source.replace('*','')
            timestrtxt = time.strftime("%m%d")
            if os.path.isfile(filename1):
                  file = open(filename1, 'r')
                  data21 = file.read()
                  data2 = data21.replace('\n','')
                  file.close()
-                 if len(data2) > 62:
+                 if len(data2) > 184:
+                       listbody1 = data2[0:58]
+                       listbody2 = data2[58:121]
+                       listbody3 = data2[121:184]
+                       listbody4 = data2[184:]
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + " 1/4:" + listbody1 )
+                       self.send_aprs_msg(sourcetrunc, "2/4:" + listbody2 )
+                       self.send_aprs_msg(sourcetrunc, "3/4:" + listbody2 )
+                       self.send_aprs_msg(sourcetrunc, "4/4:" + listbody2 )
+                       self.send_aprs_msg(sourcetrunc, "Send CQ +text to msg all in today's log. Info: aprsph.net" )
+                       logger.info("Replying with stations heard today. Exceeded length so split into 4: %s", data2 )
+                 if len(data2) > 121 and len(data2) <= 184:
+                       listbody1 = data2[0:58]
+                       listbody2 = data2[58:121]
+                       listbody3 = data2[121:]
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + " 1/3:" + listbody1 )
+                       self.send_aprs_msg(sourcetrunc, "2/3:" + listbody2 )
+                       self.send_aprs_msg(sourcetrunc, "3/3:" + listbody3 )
+                       self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprsph.net" )
+                       logger.info("Replying with stations heard today. Exceeded length so split into 3: %s", data2 )
+                 if len(data2) > 58 and len(data2) <= 121:
                        listbody1 = data2[0:58]
                        listbody2 = data2[58:]
-                       self.send_aprs_msg(source, timestrtxt + " 1/2:" + listbody1 )
-                       self.send_aprs_msg(source, "2/2:" + listbody2 )
-                       self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + " 1/2:" + listbody1 )
+                       self.send_aprs_msg(sourcetrunc, "2/2:" + listbody2 )
+                       self.send_aprs_msg(sourcetrunc, "Send CQ +text to msg all in today's log. Info: aprsph.net" )
                        logger.info("Replying with stations heard today. Exceeded length so split into 2: %s", data2 )
-                 else:
-                       self.send_aprs_msg(source, timestrtxt + ":" + data2 )
-                       self.send_aprs_msg(source, "Send CQ +text to msg all in today's log. Info: aprs.dx1arm.net" )
+                 if len(data2) <= 58:
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + ":" + data2 )
+                       self.send_aprs_msg(sourcetrunc, "Send CQ +text to msg all in today's log. Info: aprsph.net" )
                        logger.info("Replying with stations heard today: %s", data2 )
            else:
-                 self.send_aprs_msg(source, "No stations have checked in yet. NET +msg to checkin.") 
+                 self.send_aprs_msg(sourcetrunc, "No stations have checked in yet. NET +msg to checkin.") 
 
         elif qry == "cq":
            sourcetrunc = source.replace('*','')
+           cqnet = 0
 # Checking if duplicate message
            if not args == open('/home/pi/ioreth/ioreth/ioreth/lastmsg').read():
                   logger.info("Message is not exact duplicate, now logging" )
@@ -266,6 +288,7 @@ class BotAprsHandler(aprs.Handler):
                 with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as ntg:
                       data3 = "{} {}: {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
                       ntg.write(data3)
+                      cqnet = 1
                       logger.info("Writing %s net message to netlog-msg", sourcetrunc)
 # Record the message somewhere to check if next message is dupe
            with open('/home/pi/ioreth/ioreth/ioreth/lastmsg', 'w') as g:
@@ -275,6 +298,7 @@ class BotAprsHandler(aprs.Handler):
 
 # Send the message to all on the QRX list for today
            lines = []
+           sourcetrunc = source.replace('*','')
            with open(filename3) as sendlist:
                 lines = sendlist.readlines()
            count = 0
@@ -292,8 +316,17 @@ class BotAprsHandler(aprs.Handler):
            daylog.close()
            dayta31 = dayta2.replace(sourcetrunc + ',','')
            dayta3 = dayta31.replace('\n','')
-           self.send_aprs_msg(source, "QSP " + dayta3 )
+#           dayta3count = dayta3.count(",")
+           if len(dayta3) > 63:
+                 self.send_aprs_msg(sourcetrunc, "QSP today's checked-in stations. LIST to view recipients." )
+           else:
+                 self.send_aprs_msg(sourcetrunc, "QSP " + dayta3 )
            logger.info("Advising %s of messages sent to %s", sourcetrunc, dayta3)
+           if cqnet == 1:
+                 self.send_aprs_msg(sourcetrunc, "UR also checked in! QRX for CQ msgs. Net refreshes 1600Z." )
+                 logger.info("Adivising %s they are also now checked in.", sourcetrunc)
+
+
 
 # This is for permanent subscribers in your QST list. 
 # Basically a fixed implementation of "CQ" but with subscribers not having any control.
@@ -502,7 +535,6 @@ class BotAprsHandler(aprs.Handler):
         elif qry == "YOURCOMMAND2" and ( source == "CALLSIGN1" or "CALLSIGN2" or  "CALLSIGN3" ):
              os.system('ssh user@otherserver sudo shutdown --reboot')
              self.send_aprs_msg(sourcetrunc, "ttfn" )
-
 
 
         else:
@@ -729,6 +761,7 @@ class ReplyBot(AprsClient):
                     else:
 # Let cell user create an alias
                       
+
                       if smsstartupper == "ALIAS":
                           cellaliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/CELLULAR"
                           isbodyalias = len(smsreceived.split())
@@ -741,7 +774,7 @@ class ReplyBot(AprsClient):
                           with open(cellaliasfile, 'a') as makealias:
                               writealias = "{} {}\n".format(smssender, cellownalias)
                               makealias.write(writealias)
-                          sendsms = ( "echo 'U have set ur own alias as " + cellownalias + ". Ur # will not appear on APRS msgs. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                          sendsms = ( "echo 'U have set ur own alias as " + cellownalias + ". Ur # will not appear on msgs. aprs . dx1arm . net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           os.system(sendsms)
                           logger.info("Self-determined alias set for for %s as %s.", smsnumber, cellownalias )
 
@@ -805,6 +838,7 @@ class ReplyBot(AprsClient):
                                if len(smsbody) >= 48 and len(smsbody) <= 110:
                                   self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + " 1/2:" + smsbody1)
                                   self._aprs.send_aprs_msg(callsign[1:], "2/2:" + smsbody2)
+                                  self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + " Message to send/reply to PH SMS.")
                                   logger.info("SMS too long to fit 1 APRS message. Splitting into 2.")
                                if len(smsbody) >= 111 and len(smsbody) <= 173:
                                   self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + " 1/3:" + smsbody1)
@@ -821,17 +855,17 @@ class ReplyBot(AprsClient):
                                   logger.info("SMS too long to fit 1 APRS message. Splitting into 4.")
                           else:
                                self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + ":" + smsbody)
-                               self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender+ " Message to send/reply to PH SMS.")
+                               self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + " Message to send/reply to PH SMS.")
                                logger.info("SMS is in correct format. Sending to %s.", callsign)
                           if smsalias == 1 or cellsmsalias == 1:
-                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. aprs . dx1arm . net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           else:
-                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " sent. Ur # & msg may appear on online services. Send ALIAS yourname to set an alias. Go aprs.dx1arm.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " sent. Ur # & msg may appear on online services. Send ALIAS yourname to set an alias. Go aprsph.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           logger.info("Sending %s a confirmation message that APRS message has been sent.", smssender)
                           os.system(sendsms)
                       else:
 #                          if smsalias == 1:
-                          sendsms = ( "echo 'To text APRS user: \n\n@CALSGN-SSID Message\n\nMust hv @ b4 CS (SSID optional if none). To set ur alias & mask ur cell#:\n\nALIAS myname\n\naprs.dx1arm.net for info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                          sendsms = ( "echo 'To text APRS user: \n\n@CALSGN-SSID Message\n\nMust hv @ b4 CS (SSID optional if none). To set ur alias & mask ur cell#:\n\nALIAS myname\n\naprs . dx1arm . net for info.' | gammu-smsd-inject TEXT 0" + smsnumber )
 #                          else:
 #                                sendsms = ( "echo 'Incorrect format.Use: \n\n@CALSGN-SSID Message\n\nto text APRS user. Must have @ before CS. 1/2-digit SSID optional if none.' | gammu-smsd-inject TEXT 0" + smsnumber )
 
@@ -859,14 +893,30 @@ class ReplyBot(AprsClient):
            file = open(filename1, 'r')
            data5 = file.read()  
            file.close()
-           if len(data5) > 58:
+           if len(data5) > 184:
+                       listbody1 = data5[0:58]
+                       listbody2 = data5[58:121]
+                       listbody3 = data5[121:184]
+                       listbody4 = data5[184:]
+                       self._aprs.send_aprs_msg("BLN5NET", timestrtxt + " 1/4:" + listbody1)
+                       self._aprs.send_aprs_msg("BLN6NET", "2/4:" + listbody2 )
+                       self._aprs.send_aprs_msg("BLN7NET", "3/4:" + listbody3 )
+                       self._aprs.send_aprs_msg("BLN8NET", "4/4:" + listbody4 )
+           if len(data5) > 121 and len(data5) <= 184:
+                       listbody1 = data5[0:58]
+                       listbody2 = data5[58:121]
+                       listbody3 = data5[121:]
+                       self._aprs.send_aprs_msg("BLN6NET", timestrtxt + " 1/3:" + listbody1)
+                       self._aprs.send_aprs_msg("BLN7NET", "2/3:" + listbody2 )
+                       self._aprs.send_aprs_msg("BLN8NET", "3/3:" + listbody3 )
+           if len(data5) > 58 and len(data5) <= 121:
                        listbody1 = data5[0:58]
                        listbody2 = data5[58:]
-                       self._aprs.send_aprs_msg("BLN7NET", timestrtxt + " 1/2:" + listbody1)
-                       self._aprs.send_aprs_msg("BLN8NET", "2/2:" + listbody2 )
-           else:
-                       self._aprs.send_aprs_msg("BLN7NET", timestrtxt + ":" + data5)
-           self._aprs.send_aprs_msg("BLN9NET", "Full logs at http://aprs.dx1arm.net & http://cq.dx1arm.net")
+                       self._aprs.send_aprs_msg("BLN6NET", timestrtxt + " 1/2:" + listbody1)
+                       self._aprs.send_aprs_msg("BLN7NET", "2/2:" + listbody2 )
+           if len(data5) <= 58:
+                       self._aprs.send_aprs_msg("BLN6NET", timestrtxt + ":" + data5)
+           self._aprs.send_aprs_msg("BLN9NET", "Full logs at https://aprsph.net & http://aprsph.net/cq.")
            logger.info("Sending new log text to BLN7NET to BLN8NET after copying over to daily log")
 
         if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/nettext'):
@@ -880,7 +930,8 @@ class ReplyBot(AprsClient):
            logger.info("Copying latest checkin message into cumulative net log")
            os.remove('/home/pi/ioreth/ioreth/ioreth/nettext')
            logger.info("Deleting net text scratch file")
-           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/netlog-msg root@radio1.dx1arm.net:/var/www/html/aprsnet'
+           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/netlog-msg # your web folder details here'
+#           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/netlog-msg # your web folder details here'
            os.system(cmd)
            logger.info("Uploading logfile to the web")
 
@@ -895,7 +946,8 @@ class ReplyBot(AprsClient):
            logger.info("Copying latest net or checkin message into cumulative CQ message log")
            os.remove('/home/pi/ioreth/ioreth/ioreth/cqlog/cqmesg')
            logger.info("Deleting CQ text file")
-           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/cqlog/cqlog root@radio1.dx1arm.net:/var/www/html/cqlog'
+           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/cqlog/cqlog # your web folder details here'
+#           cmd = 'scp /home/pi/ioreth/ioreth/ioreth/cqlog/cqlog # your web folder details here'
            os.system(cmd)
            logger.info("Uploading cq to the web")
 
