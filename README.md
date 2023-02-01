@@ -73,11 +73,12 @@ The group chat/CQ log is at <https://aprsph.net/cq>.
 
 # Supported bot commands
 
-- **NET (space) message** - This adds the user to the day's log (refreshes every midnight at the machine's local time). It also logs the timestamp, callsign, and message to a file that can be posted on the web. See http://aprs.dx1arm.net for example.
-- **CQ (space) message** - This sends the message to all stations currently checked into the net. It also saves the timestamp, callsign, and message to a file that can be posted on the web. See http://cq.dx1arm.net for example.
+- **CQ (space) message** - This sends the message to all stations currently checked into the net. It also saves the timestamp, callsign, and message to a file that can be posted on the web. See https://aprsph.net for example.
+- **NET (space) message** - This is a "quiet" checkin. Logs the user's callsign and message without relaying the message to everyone currently in the list for the day.
 - **LIST** - returns a list of stations currently checked into the net.
-- **LOG** - Returns the last 3 net checkins and their messages.
-- **LAST** - Returns the last 3 CQ messages
+- **LAST** - Returns the last 5 CQ messages. LAST10 and LAST15 returns 10 and 15, respectively.
+- **?APRSM** - Retrieves 5 most recent messages addressed to the user from aprs.fi (effectively a way to retrieve missed message). Alternative keywords are MSG and M. ?APRSM10, MSG10, M10 retrieves the last 10 messages. User can also add a callsign+ssid to retrieve mssages for that particular station. For example ?APRSM DU2XXR-7 retrieevs the last 5 messages sent to DU2XXR-7.
+- **IC** - Set of commands that let the user draft a longer piece of message (multiple lines), then publish these onto a web log and simultaneously sent to a pre-designated station and/or email. 
 - **SMS (space) XXXXXXXXXXX (space) Message** - Sends a text message the the number XXXXXXXXXXX along with the message. This supports replies or new messages from SMS users by sending @CALLSIGN-SSID to the gateway number. Currently, the script supports numbers in the Philippines, since that is where I operate. This requires gammu-smsd daemon. Some modems might have issue processing received messages, but I have found that setting AT+CNMI to 1,2,0,0 works.
 - **SMSALIAS (space) XXXXXXXXXXX (space) Message** - Sets an alias so that the SMS recipient/sender number will no longer appear in subsequent messages.
 - **?APRST** or **?PING?** returns the path taken by the user's current ping message to the bot. 
