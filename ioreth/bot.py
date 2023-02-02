@@ -478,13 +478,13 @@ class BotAprsHandler(aprs.Handler):
                 msgbody = sourcetrunc + ":" + qry + " " + args
                 if not sourcetrunc == linetrunc:
                       if qry == "cq" :
-                         if len(msgbody) > 67 :
+                         if len(msgbodycq) > 67 :
                             msgbody1 = msgbodycq[0:61]
                             msgbody2 = msgbodycq[61:]
                             self.send_aprs_msg(linetrunc, msgbody1 + "+" )
                             self.send_aprs_msg(linetrunc, msgbody2 )
                          else:
-                            self.send_aprs_msg(linetrunc, msgbody )
+                            self.send_aprs_msg(linetrunc, msgbodycq )
 #                         self.send_aprs_msg(linetrunc, sourcetrunc + ":" + args)
                       else :
                          if len(msgbody) > 67 :
