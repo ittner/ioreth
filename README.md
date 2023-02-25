@@ -73,11 +73,15 @@ The group chat/CQ log is at <https://aprsph.net/cq>.
 
 # Supported bot commands
 
-- **CQ (space) message** - This sends the message to all stations currently checked into the net. It also saves the timestamp, callsign, and message to a file that can be posted on the web. See https://aprsph.net for example.
-- **NET (space) message** - This is a "quiet" checkin. Logs the user's callsign and message without relaying the message to everyone currently in the list for the day.
-- **LIST** - returns a list of stations currently checked into the net.
-- **LAST** - Returns the last 5 CQ messages. LAST10 and LAST15 returns 10 and 15, respectively.
-- **?APRSM** - Retrieves 5 most recent messages addressed to the user from aprs.fi (effectively a way to retrieve missed message). Alternative keywords are MSG and M. ?APRSM10, MSG10, M10 retrieves the last 10 messages. User can also add a callsign+ssid to retrieve mssages for that particular station. For example ?APRSM DU2XXR-7 retrieevs the last 5 messages sent to DU2XXR-7.
+- **CQ [space] your message** to send a message to everyone checked in for the day. This also adds you to the net log, and you will subsequently receive any CQ messages received by APRSPH thereafter. Subsequent CQ messages will also be sent to everyone in the list.
+- **NET [space] your message** will quietly join you into the daily net. This will not alert everyone in the net, but your message will be logged below. The message is optional. Sending NET without a message after will still log your callsign into the net and the recipient list.
+- **LIST** to view the current day's list of checked-in stations.
+- **LAST** to see the last 5 messages (use LAST10 for 10 messages or LAST15 for 15 messages).
+- **MINE** to view the recent CQ/NET messages sent by your own station to the net in the current month. You may include a callsign-ssid to review the last messages sent by that station (e.g., MINE DU2XXR-7). Use MINE10 or MINE15 for 10 or 15 messages, respectively.
+- **SEARCH [space] word or phrase** to find the last 5 messages from the month that contain the word or phrase. SEARCH10 or SEARCH15 to fetch 10 or 15 messages, respectively
+- **?APRST** or ?PING? to get a message with the path/s your packet took to the bot.
+- **?APRSM** or MSG to retrieve the last 5 messages sent to your callsign+ssid, using the aprs.fi API. Add a callsign-ssid after to retrieve messages directed to that callsign. Example: ?APRSM DU2XXR-7
+- **HELP** for a list of other commands.
 - **IC** - Set of commands that let the user draft a longer piece of message (multiple lines), then publish these onto a web log and simultaneously sent to a pre-designated station and/or email. 
 - **SMS (space) XXXXXXXXXXX (space) Message** - Sends a text message the the number XXXXXXXXXXX along with the message. This supports replies or new messages from SMS users by sending @CALLSIGN-SSID to the gateway number. Currently, the script supports numbers in the Philippines, since that is where I operate. This requires gammu-smsd daemon. Some modems might have issue processing received messages, but I have found that setting AT+CNMI to 1,2,0,0 works.
 - **SMSALIAS (space) XXXXXXXXXXX (space) Message** - Sets an alias so that the SMS recipient/sender number will no longer appear in subsequent messages.
@@ -86,6 +90,8 @@ The group chat/CQ log is at <https://aprsph.net/cq>.
 - **VERSION** returns the python version.
 - **HELP** returns a list of commands.
 - Commands to run server-side commands are also supported.
+
+More updated commands and instructions at https://aprsph.net.
 
 # Contact information
 - **Email**: qsl@n2rac.com
