@@ -35,7 +35,7 @@
 # The non-indented comments are mine. The indented ones are by Alexandre.
 # A lot of this is trial-and-error for me, so again, please bear with me.
 #
-# 2023-02-02 0322H
+# 2023-05-07 2045H
 
 import sys
 import time
@@ -48,6 +48,8 @@ import urllib
 import requests
 import json
 import datetime
+from datetime import datetime
+import calendar
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -80,6 +82,8 @@ iclist = "/home/pi/ioreth/ioreth/ioreth/eric/iclist"
 iclog = "/home/pi/ioreth/ioreth/ioreth/eric/eric"
 iclast = "/home/pi/ioreth/ioreth/ioreth/eric/iclast"
 iclatest = "/home/pi/ioreth/ioreth/ioreth/eric/iclatest"
+timestrtxt = time.strftime("%m%d")
+aprsfiapi = ""
 
 # Also Mmoved time string to place where it can be reset at midnight
 
@@ -136,6 +140,7 @@ class BotAprsHandler(aprs.Handler):
         sourcetrunc = source.replace('*','')
         qry_args = text.lstrip().split(" ", 1)
         qry = qry_args[0].lower()
+        qrynormalcase = qry_args[0]
         args = ""
         if not os.path.isfile(filename1):
             file = open(filename1, 'w')
@@ -150,10 +155,9 @@ class BotAprsHandler(aprs.Handler):
             "mellon!": "**door opens**  🚶🚶🚶🚶🚶🚶🚶🚶🚶  💍→🌋",
             "meow": "=^.^=  purr purr  =^.^=",
             "clacks": "GNU Terry Pratchett",
-            "73": "73 🖖",
         }
 
-        if sourcetrunc == "APRSPH" or sourcetrunc == "ANSRVR" :
+        if sourcetrunc == "APRSPH" or sourcetrunc == "ANSRVR" or sourcetrunc == "WLNK-1" or qry[0:3] == "rej" or qry[0:3] == "AA:" or args == "may be unattended" :
                   logger.info("Message from ignore list. Stop processing." )
                   return
 #        if sourcetrunc == "ANSRVR":
@@ -165,8 +169,9 @@ class BotAprsHandler(aprs.Handler):
         if qry == "ping":
             self.send_aprs_msg(sourcetrunc, "Pong! " + args )
         elif qry == "test":
-#                                            1234567890123456789012345678901234567890123456789012345678901234567
-            self.send_aprs_msg(sourcetrunc, "It works! CQ[space]msg to chckin. https://aprsph.net for more cmds.")
+            timestrtxt = time.strftime("%m%d %H%MZ")
+#                                               1234567890123456789012345678901234567890123456789012345678901234567
+            self.send_aprs_msg(sourcetrunc, timestrtxt + ":It works! HELP for more commands. Info at aprsph.net")
         elif qry == "?aprst" or qry == "?ping?" or qry == "aprst?" or qry == "aprst" :
             tmp_lst = (
                 origframe.to_aprs_string()
@@ -182,14 +187,16 @@ class BotAprsHandler(aprs.Handler):
             self.send_aprs_msg(
                 sourcetrunc, "Localtime is " + time.strftime("%Y-%m-%d %H:%M:%S %Z")
             )
-        elif qry == "help":
-#                                            1234567890123456789012345678901234567890123456789012345678901234567
-            self.send_aprs_msg(sourcetrunc, "CQ [space] msg to join net & send msg to all checked in today.")
-            self.send_aprs_msg(sourcetrunc, "NET [space] msg to checkin & join without notifying everyone.")
-            self.send_aprs_msg(sourcetrunc, "LAST/LAST10/LAST15 to retrieve 5,10 or 15 msgs. ?APRST for path.")
-            self.send_aprs_msg(sourcetrunc, "SMS [space] 09XXnumber [space] msg to text PHILIPPINE numbers only.")
-            self.send_aprs_msg(sourcetrunc, "?APRSM CALLSIGN-SSID(optional) to retrieve last 5 direct msgs.")
-            self.send_aprs_msg(sourcetrunc, "LIST to see today's checkins. https://aprsph.net for more info.")
+        elif qry in ["help", "help ", "?", "? ", "aprsph.net", "aprsph.net "] :
+            timestrtxt = time.strftime("%m%d")
+#                                            123456789012345678901234567890123456789012345678901234567890123       4567
+            self.send_aprs_msg(sourcetrunc, "CQ [space] msg to join net & send msg to all checked in today /" +timestrtxt)
+            self.send_aprs_msg(sourcetrunc, "NET [space] msg to checkin & join without notifying everyone /" +timestrtxt)
+            self.send_aprs_msg(sourcetrunc, "LAST/LAST10/LAST15 to retrieve 5/10/15 msgs. ?APRST for path /"+timestrtxt)
+            self.send_aprs_msg(sourcetrunc, "SMS [spc] 09XXnumber [spc] msg to text PHILIPPINE numbers /" +timestrtxt)
+            self.send_aprs_msg(sourcetrunc, "?APRSM fort last 10 direct msgs to you. U to leave the net /" +timestrtxt)
+            self.send_aprs_msg(sourcetrunc, "MINE for ur last net msgs. SEARCH [spc] phrase to find msgs /" +timestrtxt)
+            self.send_aprs_msg(sourcetrunc, "LIST to see today's checkins. https://aprsph.net for more info/"+timestrtxt)
 
 
 # CQ[space]msg to join,LIST for net,LAST for log. More at aprsph.net.")
@@ -202,9 +209,11 @@ class BotAprsHandler(aprs.Handler):
 #This logs messages sent via APRSThursday
         elif qry == "n:hotg" :
            sourcetrunc = source.replace('*','')
+           timestrtxt = time.strftime("%m%d %H%MZ")
 # Checking if duplicate message
 # If not, write msg to temp file
            dupecheck = qry + " " + args
+           dt = datetime.now()
            if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/lastmsgdirthurs/' + sourcetrunc) and dupecheck == open('/home/pi/ioreth/ioreth/ioreth/lastmsgdirthurs/' + sourcetrunc).read():
                   logger.info("Message is exact duplicate. Stop logging." )
                   return
@@ -212,7 +221,10 @@ class BotAprsHandler(aprs.Handler):
                   logger.info("Message is not exact duplicate, now logging" )
 
                   with open('/home/pi/ioreth/ioreth/ioreth/aprsthursdaytext', 'w') as g:
-                       data3 = "{} {}:{} [#APRSThursday]".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                       if dt.isoweekday() == 4 :
+                           data3 = "{} {}:{} [#APRSThursday]".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                       else :
+                           data3 = "{} {}:{}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
                        g.write(data3)
                        logger.info("Writing %s net message to netlog text", sourcetrunc)
                        fout = open('/home/pi/ioreth/ioreth/ioreth/aprsthursday/index.html', 'a')
@@ -220,8 +232,12 @@ class BotAprsHandler(aprs.Handler):
                        fout.write("\n")
                        fout.close()
                        logger.info("Writing latest checkin message into APRSThursday net log")
-#                                                  1234567890123456789012345678901234567890123456789012345678901234567
-#                  self.send_aprs_msg(sourcetrunc, "Tnx. Ur msg is also logged at https://aprsph.net -KC8OWL & DU2XXR")
+#                                                        1234567890123456789012345678901234567890123456789012345678901234567
+                  if dt.isoweekday() == 4 or sourcetrunc == "DU2XXR-9" :
+                        self.send_aprs_msg(sourcetrunc, "Logged:" + timestrtxt + " https://aprsph.net/aprsthursday -KC8OWL & DU2XXR")
+                        logger.info("It's Thursday. Notifing %s that their message is logged.", sourcetrunc)
+                  else:
+                        logger.info("It's not Thursday, so just logging %s message to HOTG.", sourcetrunc)
 # Record the message somewhere to check if next message is dupe
                   dupecheck = qry + " " + args
                   with open('/home/pi/ioreth/ioreth/ioreth/lastmsgdirthurs/' + sourcetrunc, 'w') as g:
@@ -244,9 +260,56 @@ class BotAprsHandler(aprs.Handler):
                       logger.info("Joining APRSThursday")
 
 
+        elif qry in ["u", "u ", "unsubscribe", "unsubscribe ", "checkout", "checkout ", "leave", "leave ", "exit", "exit "] :
+# == "u" or qry == "unsubscribe" or qry == "checkout" or qry == "leave"  :
+ 
+
+# Checking if already in log
+           with open(filename3, 'r') as file:
+                 timestrtxt = time.strftime("%m%d %H%MZ")
+                 search_word = sourcetrunc 
+                 search_replace = search_word + ","
+                 if(search_word in file.read()):
+#                                                      1234567890123456789012345678901234567890123456789012345678901234567
+                      self.send_aprs_msg(sourcetrunc, "Unsubscribing from net " + timestrtxt +". NET or CQ to join again.")
+                      logger.info("Found %s in today's net. Unsubscribing", sourcetrunc)
+# Remove them from the day's list
+                      with open(filename1, 'r') as file1:
+                           filedata = file1.read()
+                           filedata = filedata.replace(search_replace, '')
+                      with open(filename1, 'w') as file1:
+                           file1.write(filedata)
+
+# Now remove them from the send list
+                      with open(filename3, 'r') as file2:
+                           filedata = file2.read()
+                           sourcen = sourcetrunc + "\n"
+                           filedata = filedata.replace(sourcen, '')
+                      with open(filename3, 'w') as file2:
+                           file2.write(filedata)
+
+                      file2.close()
+
+                      with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as g:
+                           data3 = "{} {}:{} [Checked out from the net]".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                           g.write(data3)
+                           logger.info("Writing %s unsubscribe and message into netlog text", sourcetrunc)
+                           fout = open('/home/pi/ioreth/ioreth/ioreth/netlog-msg', 'a')
+                           fout.write(data3)
+                           fout.write("\n")
+                           fout.close()
+                           logger.info("Writing unsubscribe message into cumulative log.")
 
 
-        elif qry == "net" or qry == "checking" or qry == "check" or qry == "checkin" or qry == "joining" or qry == "join" or qry == "qrx" or qry == "j"  :
+
+# If not in log, then add them
+                 else:
+                      timestrtxt = time.strftime("%m%d")
+                      self.send_aprs_msg(sourcetrunc, "Ur not checked in today " + timestrtxt + ". NET or CQ to join the net.")
+                      logger.info("Replying to %s that they are not yet subscribed", sourcetrunc)
+
+
+        elif qry in ["net", "check", "checkin", "checking", "checking ",  "joining", "join", "qrx", "j", "k", "check-in", "net "] :
            sourcetrunc = source.replace('*','')
 # Checking if duplicate message
 # If not, write msg to temp file
@@ -259,7 +322,10 @@ class BotAprsHandler(aprs.Handler):
                   logger.info("Message is not exact duplicate, now logging" )
 
                   with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as g:
-                       data3 = "{} {}:{} *".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                       if qry == "net":
+                          data3 = "{} {}:{} *".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
+                       else:
+                          data3 = "{} {}:{} {} *".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, qrynormalcase, args)
                        g.write(data3)
                        logger.info("Writing %s net message to netlog text", sourcetrunc)
                        fout = open('/home/pi/ioreth/ioreth/ioreth/netlog-msg', 'a')
@@ -272,15 +338,17 @@ class BotAprsHandler(aprs.Handler):
 
 
 # Checking if already in log
-           with open(filename1, 'r') as file:
+           with open(filename3, 'r') as file:
+                 timestrtxt = time.strftime("%m%d %H%MZ")
                  search_word = sourcetrunc
                  if(search_word in file.read()):
-#                                                      1234567890123456789012345678901234567890123456789012345678901234567
-                      self.send_aprs_msg(sourcetrunc, "RR new msg.CQ[spc]msg,LIST,LAST,HELP.Net renews @0000Z. aprsph.net")
+#                                                      1234567890123456789012       345678901234567890123456789012345678901234567
+                      self.send_aprs_msg(sourcetrunc, "QSL new msg " + timestrtxt +".CQ[spc]msg,LIST,LAST.Info:HELP or aprsph.net")
                       logger.info("Checked if %s already logged to prevent duplicate. Skipping checkin", sourcetrunc)
                       file.close()
 # If not in log, then add them
                  else:
+                      timestrtxt = time.strftime("%m%d")
                       with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as f:
                          f.write(sourcetrunc)
                          f.close()
@@ -289,9 +357,10 @@ class BotAprsHandler(aprs.Handler):
 #                                                         1234567890123456789012345678901234567890123456789012345678901234567
                          self.send_aprs_msg(sourcetrunc, "U may also add msg.CQ[spc]msg.LAST for history.LIST for recipients")
 #                      else:
-#                                                         1234567890123456789012345678901234567890123456789012345678901234567
-                      self.send_aprs_msg(sourcetrunc, "RR " + sourcetrunc + ".CQ[spc]msg.LAST view history.LIST for recipients")
-                      self.send_aprs_msg(sourcetrunc, "Stdby for CQ msgs. Net renews @0000Z. aprsph.net for info." )
+#                                                      1234567890123          4    5678          9012345678901234567890123456789012345678901234567
+                      self.send_aprs_msg(sourcetrunc, "QSL " + sourcetrunc + " " + timestrtxt + ". LAST view history. LIST recipients. U to leave")
+#                                                      123456789012345678901           2345678901234567890123456789012345678901234567
+                      self.send_aprs_msg(sourcetrunc, "Stdby 4 msgs til "+timestrtxt+ " 2359Z.CQ[spc]msg QSP. Info:HELP or aprsph.net" )
                       logger.info("Replying to %s checkin message", sourcetrunc)
 
 # Record the message somewhere to check if next message is dupe
@@ -302,7 +371,7 @@ class BotAprsHandler(aprs.Handler):
                 logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
                 g.close()
 
-        elif qry == "list" or qry == "?aprsd":
+        elif qry == "list" or qry == "?aprsd" or qry == "qni" :
            sourcetrunc = source.replace('*','')
            timestrtxt = time.strftime("%m%d")
            if os.path.isfile(filename1):
@@ -311,7 +380,24 @@ class BotAprsHandler(aprs.Handler):
                  data2 = data21.replace('\n','')
                  file.close()
 
-                 if len(data2) > 310:
+                 if len(data2) > 373:
+                       listbody1 = data2[0:58]
+                       listbody2 = data2[58:121]
+                       listbody3 = data2[121:184]
+                       listbody4 = data2[184:247]
+                       listbody5 = data2[247:310]
+                       listbody6 = data2[310:]
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + " 1/7:" + listbody1 )
+                       self.send_aprs_msg(sourcetrunc, "2/7:" + listbody2 )
+                       self.send_aprs_msg(sourcetrunc, "3/7:" + listbody3 )
+                       self.send_aprs_msg(sourcetrunc, "4/7:" + listbody4 )
+                       self.send_aprs_msg(sourcetrunc, "5/7:" + listbody5 )
+                       self.send_aprs_msg(sourcetrunc, "6/7:" + listbody6 )
+                       self.send_aprs_msg(sourcetrunc, "7/7:+More stations. Refer https://aprsph.net for today's full log." )
+#                       self.send_aprs_msg(sourcetrunc, "CQ[space]text to join & msg all in today's net. Info: aprsph.net" )
+#                                                       1234567890123456789012345678901234567890123456789012345678901234567
+                       logger.info("Replying with stations heard today. Exceeded length so split into 7 and advised to go to website: %s", data2 )
+                 if len(data2) > 310 and len(data2) <=373 :
                        listbody1 = data2[0:58]
                        listbody2 = data2[58:121]
                        listbody3 = data2[121:184]
@@ -380,17 +466,45 @@ class BotAprsHandler(aprs.Handler):
                  self.send_aprs_msg(sourcetrunc, "CQ[space]msg to join/chat. LAST for msg log. Info: aprsph.net" )
            else:
                  self.send_aprs_msg(sourcetrunc, "No stations checked in yet. CQ[space]msg to checkin.") 
+        elif qry == "netremind" :
+           lines = []
+           sourcetrunc = source.replace('*','')
+           with open(filename3) as sendlist:
+                lines = sendlist.readlines()
+           count = 0
+           for line in lines:
+                linetrunc = line.replace('\n','')
+                count += 1
+                strcount = str(count)
+                timestrtxt = time.strftime("%m%d")
+#                                   1234567890123456789012345678901234567890123456789012345678901234567
+#                msgbody = timestrtxt + " This is a test message from the aprsph net manager."
+                msgbody = timestrtxt + " net is restarting soon. Checkin again after 0000Z to rejoin."
+                self.send_aprs_msg(linetrunc, msgbody )
+                logger.info("Reminding %s that net will restart soon.", linetrunc)
 
-        elif qry == "cq" or qry == "hi" or qry == "hello" or qry == "happy" or qry == "ga" or qry == "gm" or qry == "ge" or qry == "gn" or qry == "good" or qry == "ok" or qry == "k"  :
+
+
+        elif qry in ["cq", "hi", "hello", "happy","ga", "gm", "ge", "gn", "good", "ok", "k", "thanks", "73" ] :
 
            sourcetrunc = source.replace('*','')
            cqnet = 0
            nocheckins = 0
 # Checking if duplicate message
            dupecheck = qry + " " + args
+           args2 = args.upper()
            if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/lastmsgdir/' + sourcetrunc) and dupecheck == open('/home/pi/ioreth/ioreth/ioreth/lastmsgdir/' + sourcetrunc).read():
                   logger.info("Message is exact duplicate, stop logging." )
                   return
+           if args2 in ["LIST,", "LIST ", "LAST", "LAST ", "LAST10", "LAST10 ", "LAST15", "LAST15 ", "HELP", "HELP ", "APRSM?", "APRSM? " ] :
+# == "LIST" or args2 == "LIST " or args2 == "LAST" or args2 == "LAST " or args2 == "LAST10" or args2 == "LAST10 " or args2 == "HELP" or args2 == "HELP " or args2 == "?APRSM" :
+                        timestrtxt = time.strftime("%m%d:")
+                        logger.info("CQ message is a command. Advising user to use the command without CQ" )
+#                                                                1234567890123456789012345678901234567890123456789012345678901234567
+                        self.send_aprs_msg(sourcetrunc, timestrtxt + "Are u trying to send a command? Try sending without CQ" )
+                        self.send_aprs_msg(sourcetrunc, timestrtxt + "For example:" + args2 + " (without CQ before it)" )
+                        self.send_aprs_msg(sourcetrunc, timestrtxt + "HELP for list of commands. More info at https://aprsph.net." )
+                        return
            else:
                   logger.info("Message is not exact duplicate, now logging" )
 # This logs the message into net text draft for adding into the message log.
@@ -398,7 +512,7 @@ class BotAprsHandler(aprs.Handler):
                        if qry == "cq" :
                           data9 = "{} {}:{}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
                        else :
-                          data9 = "{} {}:{} {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, qry, args)
+                          data9 = "{} {}:{} {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, qrynormalcase, args)
                        cqm.write(data9)
                        cqm.close()
                        logger.info("Writing %s CQ message to nettext", sourcetrunc)
@@ -411,7 +525,8 @@ class BotAprsHandler(aprs.Handler):
 # If no checkins, we will check you in and also post your CQ message into the CQ log, and also include in net log
            if not os.path.isfile(filename3) :
                nocheckins = 1
-               self.send_aprs_msg(sourcetrunc, "You are first in today's log." ) 
+               timestrtxt = time.strftime("%m%d")
+               self.send_aprs_msg(sourcetrunc, "You are first in the day's log for " + timestrtxt + "." ) 
                with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as nt:
                    nt.write(sourcetrunc)
                    logger.info("Writing %S message to netlog", sourcetrunc)
@@ -422,13 +537,14 @@ class BotAprsHandler(aprs.Handler):
                    return
                else:
                    logger.info("Message is not exact duplicate, now logging" )
+                   timestrtxt = time.strftime("%m%d:")
                    with open('/home/pi/ioreth/ioreth/ioreth/nettext', 'w') as ntg:
 # If not duplicate, this logs the message into net text draft for adding into the message log.
 
                         if qry == "cq" :
                            data3 = "{} {}:{}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, args)
                         else :
-                           data3 = "{} {}:{} {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, qry, args)
+                           data3 = "{} {}:{} {}".format(time.strftime("%Y-%m-%d %H:%M:%S %Z"), sourcetrunc, qrynormalcase, args)
                         ntg.write(data3)
                         logger.info("Writing %s net message to netlog-msg", sourcetrunc)
                         fout = open('/home/pi/ioreth/ioreth/ioreth/netlog-msg', 'a')
@@ -440,7 +556,7 @@ class BotAprsHandler(aprs.Handler):
                logger.info("Advising %s to checkin", sourcetrunc)
                return
 # If not yet in log, add them in and add their message to net log.
-           file = open(filename1, 'r')
+           file = open(filename3, 'r')
            search_word = sourcetrunc
            if not (search_word in file.read()):
                 with open('/home/pi/ioreth/ioreth/ioreth/netlog', 'w') as cqf:
@@ -466,6 +582,7 @@ class BotAprsHandler(aprs.Handler):
 
 # Send the message to all on the QRX list for today
            lines = []
+           timestrtxt = time.strftime("%m%d")
            sourcetrunc = source.replace('*','')
            with open(filename3) as sendlist:
                 lines = sendlist.readlines()
@@ -475,14 +592,14 @@ class BotAprsHandler(aprs.Handler):
                 count += 1
                 strcount = str(count)
                 msgbodycq = sourcetrunc + ":" + args
-                msgbody = sourcetrunc + ":" + qry + " " + args
+                msgbody = sourcetrunc + ":" + qrynormalcase + " " + args
                 if not sourcetrunc == linetrunc:
                       if qry == "cq" :
                          if len(msgbodycq) > 67 :
                             msgbody1 = msgbodycq[0:61]
                             msgbody2 = msgbodycq[61:]
                             self.send_aprs_msg(linetrunc, msgbody1 + "+" )
-                            self.send_aprs_msg(linetrunc, msgbody2 )
+                            self.send_aprs_msg(linetrunc, sourcetrunc + ":+" + msgbody2 )
                          else:
                             self.send_aprs_msg(linetrunc, msgbodycq )
 #                         self.send_aprs_msg(linetrunc, sourcetrunc + ":" + args)
@@ -491,14 +608,14 @@ class BotAprsHandler(aprs.Handler):
                             msgbody1 = msgbody[0:61]
                             msgbody2 = msgbody[61:]
                             self.send_aprs_msg(linetrunc, msgbody1 + "+" )
-                            self.send_aprs_msg(linetrunc, msgbody2 )
+                            self.send_aprs_msg(linetrunc, sourcetrunc + ":+" + msgbody2 )
                          else:
                             self.send_aprs_msg(linetrunc, msgbody )
 
 
 #                         self.send_aprs_msg(linetrunc, sourcetrunc + ":" + qry + " " + args)
 #                                                    1234567890123456789012345678901234567890123456789012345678901234567
-                      self.send_aprs_msg(linetrunc, "CQ [space] msg to reply.LIST for recipients.LAST/LAST10 for history" )
+                      self.send_aprs_msg(linetrunc, "CQ[spc]msg to reply.LIST for recipients.LAST/LAST10 -history " + timestrtxt + "." )
                 logger.info("Sending CQ message to %s except %s", linetrunc, sourcetrunc)
 # This reads the day's log from a line-separated list for processing one message at a time.
 # Advise sender their message is being processed/sent
@@ -511,52 +628,101 @@ class BotAprsHandler(aprs.Handler):
            if nocheckins == 1:
                  self.send_aprs_msg(sourcetrunc, "No CQ recipients yet. You are first in today's log." ) 
            else:
-               if len(dayta3) > 63:
+               timestrtxt = time.strftime("%m%d %H%MZ:")
+               if len(dayta3) > 51 :
                      count = 0
                      for i in dayta3:
                          if i == ',':
                             count = count + 1
-                     self.send_aprs_msg(sourcetrunc, "QSP " + str(count) + " stations. LIST to view recipients." )
+#                                                    12345678901   2345    67            89012345678901234567890123456789012345678901234567
+                     self.send_aprs_msg(sourcetrunc, timestrtxt + "QSP " + str(count) + " stations. LIST for recipients. LAST for history." )
                elif len(dayta3) < 1:
-                     self.send_aprs_msg(sourcetrunc, "No other checkins yet. You are first in today's log." + dayta3 )
+                     timestrtxt = time.strftime("%m%d")
+                     self.send_aprs_msg(sourcetrunc, "No other checkins yet. You are first in the log for " + timestrtxt )
                else:
-                     self.send_aprs_msg(sourcetrunc, "QSP " + dayta3 )
+#                                                    12345678901   23456789012345678901234567890123456789012345678901234567
+                     self.send_aprs_msg(sourcetrunc, timestrtxt + "QSP "+ dayta3 )
            logger.info("Advising %s of messages sent to %s", sourcetrunc, dayta3)
            if cqnet == 1:
-                 self.send_aprs_msg(sourcetrunc, "Ur also checked in! Stby for mesgs. Net resets 0000Z. aprsph.net" )
+                 timestrtxt = time.strftime("%m%d %H%MZ")
+#                                                 123456789012345678901234        5678901234567890123456789012345678901234567
+                 self.send_aprs_msg(sourcetrunc, "Ur checked in " + timestrtxt + ". QRX pls til 2359Z. U to exit. aprsph.net" )
                  logger.info("Adivising %s they are also now checked in.", sourcetrunc)
+
+# This option basically sends an SMS to satellite phones in the Thuraya network. We may add additional phones as needed. Mostly for testing and proof of concept!
+
+        elif qry == "sat" :
+           sourcetrunc = source.replace('*','')
+           satargs = args.replace('\"','')
+           satargs2 = satargs.replace('\'','')
+           satnum = satargs2.split(' ',1)[0]
+           dupecheck = qry + " " + args
+           timestrtxt = time.strftime("%m%d")
+           if os.path.isfile('/home/pi/ioreth/ioreth/ioreth/lastmsgdir/' + sourcetrunc) and dupecheck == open('/home/pi/ioreth/ioreth/ioreth/lastmsgdir/' + sourcetrunc).read():
+                  logger.info("Message is exact duplicate, stop logging" )
+                  return
+
+           if not len(satnum) == 8 or not satnum.isnumeric()  :
+               logger.info("Error validating satellite message number from %s to %s", sourcetrunc,satnum)
+#                                              1234          567890123456789012345678901 234567890123456789012345678901234567
+               self.send_aprs_msg(sourcetrunc, timestrtxt + " ERROR:Use 8-digit Thuraya \# after SAT. Example:SAT 44441234. " )
+               return
+           if satargs2.split(' ',1)[1] == "" :
+               logger.info("Error validating satellite message number from %s to %s: Blank msg", sourcetrunc,satnum)
+#                                               1234567890123456789012345678901234567890123456789012345678901234567
+               self.send_aprs_msg(sourcetrunc, timestrtxt + " ERROR:Message body is blank. Include msg after number." )
+               return
+#           else:
+           satmesg = satargs2.split(' ',1)[1]
+           cmd = "curl -X POST https://sms.thuraya.com/sms.php -H \"Content-Type: application/x-www-form-urlencoded\" -d \"msisdn=" + satnum + "&from=" + sourcetrunc + "&message=" + satmesg + " -via aprsph.net\""
+           try:
+               os.system(cmd)
+#                                               1234567890123456789012345678901234567890123456789012345678901234567
+               self.send_aprs_msg(sourcetrunc, "Attempt send sat SMS to " + satnum + ":" + satmesg[0:30] + "..." )
+               logger.info("Sending satellite message from %s to %s: %s", sourcetrunc, satnum, satmesg)
+           except:
+               self.send_aprs_msg(sourcetrunc, "Error sending sat SMS to " + satnum + ":" + satmesg[0:30] + "..."  )
+               logger.info("Error sending satellite message from %s to %s:%s", sourcetrunc,satnum,satmesg)
+           with open('/home/pi/ioreth/ioreth/ioreth/lastmsgdir/' + sourcetrunc, 'w') as g:
+               lasttext = args
+               g.write(dupecheck)
+               logger.info("Writing %s message somewhere to check for future dupes", sourcetrunc)
+
+
 
 # START ?APRSM or MESSAGE retrieval from aprs.fi. This feature uses the API to retrieve the last 10 messages and delivers to the user.
 # May be useful for checking for any missed messages.
 
+
 # First we test the output file
-        elif qry == "?aprsm" or qry == "msg" or qry == "m" or qry == "msg10" or qry == "m10" :
+        elif qry in ["?aprsm", "?aprsm ", "msg", "msg ", "m", "m ", "?aprsm5", "aprsm10", "aprsm5 ", "aprsm10 ", "msg5", "msg5 ", "msg10", "msg10 ", "m5", "m5 ", "m10", "m10 "] :
+# == "?aprsm" or qry == "msg" or qry == "m" or qry == "msg10" or qry == "m10" or qry == "?aprsm10" :
            sourcetrunc = source.replace('*','')
+           timestrtxt = time.strftime("%m%d")
+# Let's throttle the response to once per 5 minutes. Otherwise, receiving the same query in rapid succession could result in varied sets of responses.
+           dupecheck = "/home/pi/ioreth/ioreth/ioreth/aprsm/" + sourcetrunc
+           if os.path.isfile(dupecheck) and args =="" :
+#                                               1234567890123456789012345678901234567890123456789012345678901234567
+               self.send_aprs_msg(sourcetrunc, "?APRSM queries for own callsign+ssid limited to 1x per 30min. " +timestrtxt )
+               logger.info("%s already made an ?APRSM query recently. Throttling response.", sourcetrunc)
+               return
            if args == "" :
-                callsign = sourcetrunc.upper()
+                callsign = sourcetrunc
+                with open(dupecheck, 'w') as file:
+                     file.write("")
+                     logger.info("Adding a dupecheck to throttle responses for %s", sourcetrunc)
+
            else:
                 callsign = args.split(' ', 1)[0].upper()
-           apicall = "https://api.aprs.fi/api/get?what=msg&dst=" + callsign + "&apikey=[YOUR API KEY HERE]&format=json"
-#           jsonoutput = "/home/pi/ioreth/ioreth/ioreth/aprsm/" + sourcetrunc + ".json"
-#           msgoutput = "/home/pi/ioreth/ioreth/ioreth/aprsm/" + sourcetrunc + ".txt"
-#           cmd = "wget \"" + apicall + "\" -O " + jsonoutput
+           apicall = "https://api.aprs.fi/api/get?what=msg&dst=" + callsign + "&apikey=" +  aprsfiapi + "&format=json"
            try:
-#               hdr = { 'User-Agent' : 'Ioreth APRSPH bot (aprsph.net)' }
-#               req = urllib.request.Request(apicall, headers=hdr, timeout=2)
-#               response = urllib.request.urlopen(req).read().decode('UTF-8')
-#               hdr = "'user-agent': 'APRSPH/2023-01-28b (+https://aprsph.net)'"
                hdr = { 'User-Agent': 'Ioreth APRSPH bot (https://aprsph.net)' }
-#               response = urllib.request.urlopen(apicall, timeout=2).read().decode('UTF-8')
                req = urllib.request.Request(url=apicall, headers={'User-Agent':' APRSPH/2023-01-29 (+https://aprsph.net)'})
-# Mozilla/5.0 (Windows NT 6.1; WOW64; rv:12.0) Gecko/20100101 Firefox/12.0'})
-               response = urllib.request.urlopen(req, timeout=2).read().decode('UTF-8')
-#               response = urllib.request.urlopen(apicall, timeout=2).read().decode('UTF-8')
-#               response.add_header('User-Agent','APRSPH/2023-01-28 (+https://aprsph.net)')
+               response = urllib.request.urlopen(req, timeout=5).read().decode('UTF-8')
                jsonResponse = json.loads(response)
+
            except:
                self.send_aprs_msg(sourcetrunc, "Error in internet or connection to aprs.fi.")
-#               logger.info("%s", response)
-#               logger.info("%s", jsonResponse)
 
                logger.info("Internet error in retrieving messages for %s", callsign)
                return
@@ -566,17 +732,16 @@ class BotAprsHandler(aprs.Handler):
                    logger.info("No messages retrieved for %s", callsign)
                    return
            else:
-#                   logger.info("%s", response)
-#                   logger.info("%s", jsonResponse)
-                   self.send_aprs_msg(sourcetrunc, "Recent messages to " + callsign + " retrieved from aprs.fi." )
+                   timestrtxt = time.strftime("%m%d %H%MZ")
 
                    count = 0
                    for rows in jsonResponse['entries']:
 #                         logger.info("%s", rows)
-                         if count == 5 and qry == "m" or qry == "msg" or qry == "?aprsm" :
+# Below line enables limiting output to just 5 messages. Otherwise, it generates 10 by default.
+                         if count == 5 and qry in ["m5", "msg5", "?aprsm5", "m5 ", "msg5 ", "?aprsm5 "] :
                             break
                          count += 1
-                         msgtime = datetime.datetime.fromtimestamp(int(rows['time'])).strftime('%m-%d %H%MZ')
+                         msgtime = datetime.fromtimestamp(int(rows['time'])).strftime('%m-%d %H%MZ')
                          msgsender = rows['srccall']
                          msgmsg = rows['message']
                          strcount = str(count)
@@ -589,10 +754,78 @@ class BotAprsHandler(aprs.Handler):
                          else:
                             self.send_aprs_msg(sourcetrunc, msgbody )
 
-#                         self.send_aprs_msg(sourcetrunc, str(count) + ".From " + msgsender + " sent on " + msgtime )
-#                         self.send_aprs_msg(sourcetrunc, str(count) + "." + msgmsg )
+#                                                              123456789012345678901234567       8901234567890123456789012345678901234567
+                   self.send_aprs_msg(sourcetrunc, str(count) + " latest msgs to " + callsign + " retrieved from aprs.fi on " + timestrtxt )
                    logger.info("Sending last messages retrieved for %s", callsign)
 
+# Deprecated code below. You might want to refer to it in future for other functions.
+#           try:
+#              os.system(cmd)
+#              logger.info("Retrieved last messages for %s", sourcetrunc)
+#           except:
+#              logger.info("ERROR retrieving last messages from aprs.fi")
+#              self.send_aprs_msg(sourcetrunc, "Error retrieving latest msgs from aprs.fi. Try again later.")
+#              return
+
+# Now we parse the file
+#           with open(jsonoutput, 'r') as file:
+#                messages = json.load(file)
+#           with open(msgoutput, 'w') as msgfile:
+#                for rows in messages:
+
+
+#                time1 = datetime.datetime.fromtimestamp(int(messages['entries'][0]["time"])).strftime('%Y-%m-%d %H:%M:%S UTC')
+#                time2 = datetime.datetime.fromtimestamp(int(messages['entries'][1]["time"])).strftime('%Y-%m-%d %H:%M:%S UTC')
+#                time3 = datetime.datetime.fromtimestamp(int(messages['entries'][2]["time"])).strftime('%Y-%m-%d %H:%M:%S UTC')
+#                time4 = datetime.datetime.fromtimestamp(int(messages['entries'][3]["time"])).strftime('%Y-%m-%d %H:%M:%S UTC')
+#                time5 = datetime.datetime.fromtimestamp(int(messages['entries'][4]["time"])).strftime('%Y-%m-%d %H:%M:%S UTC')
+#                sender1 = messages['entries'][0]["srccall"]
+#                sender2 = messages['entries'][1]["srccall"]
+#                sender3 = messages['entries'][2]["srccall"]
+#                sender4 = messages['entries'][3]["srccall"]
+#                sender5 = messages['entries'][4]["srccall"]
+#                msg1 = messages['entries'][0]["message"]
+#                msg2 = messages['entries'][1]["message"]
+#                msg3 = messages['entries'][2]["message"]
+#                msg4 = messages['entries'][3]["message"]
+#                msg5 = messages['entries'][4]["message"]
+
+#                msgfile.write("1.Msg from " + sender1 + " sent on " + time1 + "\n")
+#                msgfile.write("1." + msg1 + "\n")
+#                msgfile.write("2.Msg from " + sender2 + " sent on " + time2 + "\n")
+#                msgfile.write("2." + msg2 + "\n")
+#                msgfile.write("3.Msg from " + sender3 + " sent on " + time3 + "\n")
+#                msgfile.write("3." + msg3 + "\n")
+#                msgfile.write("4.Msg from " + sender4 + " sent on " + time4 + "\n")
+#                msgfile.write("4." + msg4 + "\n")
+#                msgfile.write("5.Msg from " + sender5 + " sent on " + time5 + "\n")
+#                msgfile.write("5." + msg5)
+#                msgfile.close()
+#                logger.info("Saved message file for %s", sourcetrunc)
+
+# Now we return the list of messages retrieved from APRS.fi
+#                self.send_aprs_msg(sourcetrunc, "Last 5 messages to " + sourcetrunc + " retrieved from aprs.fi." )
+#                with open(msgoutput, 'r') as msgfile:
+#                    lines = msgfile.readlines()
+#                    msgfile.close()
+#                                                1234567890123456789012345678901234567890123456789012345678901234567
+
+#                    count = 0
+#                    for line in lines:
+#                          linetrunc = line.replace('\n','')
+#                          if linetrunc == "":
+#                             self.send_aprs_msg(sourcetrunc, "No recent msgs to display, or old data has been purged.")
+#                             logger.info("Nomessages retrieved for %s", sourcetrunc)
+#                             return
+#                          count +=1
+#                          self.send_aprs_msg(sourcetrunc, linetrunc[0:67])
+#                    logger.info("Sending last 5 aprs-is messages retrieved for %s", sourcetrunc)
+
+#                msgfile.write("6." + messages['entries'][5]["srccall"] + ":" + messages['entries'][5]["message"] + "\n")
+#                msgfile.write("7." + messages['entries'][6]["srccall"] + ":" + messages['entries'][6]["message"] + "\n")
+#                msgfile.write("8." + messages['entries'][7]["srccall"] + ":" + messages['entries'][7]["message"] + "\n")
+#                msgfile.write("9." + messages['entries'][8]["srccall"] + ":" + messages['entries'][8]["message"] + "\n")
+#                msgfile.write("10." + messages['entries'][9]["srccall"] + messages['entries'][9]["message"] + "\n")
 #                msgfile.write("\n")
 
 # START ERIC
@@ -682,7 +915,7 @@ class BotAprsHandler(aprs.Handler):
               os.system(copylatest)
               os.remove(icdraft)
               logger.info("Copied draft to iclatest and deleting draft report from %s", sourcetrunc)
-              cmd = 'scp /home/pi/ioreth/ioreth/ioreth/eric/eric [DESTINATION HERE]'
+              cmd = 'scp /home/pi/ioreth/ioreth/ioreth/eric/eric root@radio1.dx1arm.net:/var/www/aprsph.net/public_html/ic/index.html'
               try:
                  os.system(cmd)
                  logger.info("Uploading iclog to the web")
@@ -711,7 +944,7 @@ class BotAprsHandler(aprs.Handler):
               lines = []
               with open(iclasts) as reportsubject:
                   reportsubj = reportsubject.readlines()[-1]
-              icmailcmd = "cat " + iclasts + " | /home/pi/ioreth/ioreth/ioreth/eric/patmail.sh [YOUR EMAIL] \"" + reportsubj + "\" telnet" 
+              icmailcmd = "cat " + iclasts + " | /home/pi/ioreth/ioreth/ioreth/eric/patmail.sh jangelo@gmail.com \"" + reportsubj + "\" telnet" 
               try:
                   os.system(icmailcmd)
                   self.send_aprs_msg(sourcetrunc, "Emailed " + reportsubj[9:])
@@ -730,7 +963,7 @@ class BotAprsHandler(aprs.Handler):
                   return
               with open(iclasts) as reportsubject:
                   reportsubj = reportsubject.readlines()[-1]
-              icmailcmd = "cat " + iclasts + " | /home/pi/ioreth/ioreth/ioreth/eric/patmail.sh [YOUR EMAIL] \"" + reportsubj + "\" telnet" 
+              icmailcmd = "cat " + iclasts + " | /home/pi/ioreth/ioreth/ioreth/eric/patmail.sh jangelo@gmail.com \"" + reportsubj + "\" telnet" 
               try:
                   os.system(icmailcmd)
                   self.send_aprs_msg(sourcetrunc, "Emailed " + reportsubj[9:])
@@ -738,6 +971,7 @@ class BotAprsHandler(aprs.Handler):
               except:
                   self.send_aprs_msg(sourcetrunc, "IC email error.")
                   logger.info("Error sending IC message to email") 
+
 
 
 
@@ -844,91 +1078,105 @@ class BotAprsHandler(aprs.Handler):
 #             file.close()
 
 # Lines below let the user retrieve the last messages from the log.
-        elif qry == "last" or qry == "log" or qry == "last5" : 
+        elif qry in ["last", "log", "last5", "last10", "log10", "last15", "log15", "mine", "mine10", "mine15", "search", "mine ", "mine10 ", "mine15" ] :
+             sourcetrunc = source.replace('*','')
+             timestrtxt = time.strftime("%m%d")
+#             callnossid = sourcetrunc.split('-', 1)[0]
+             if qry in ["mine", "mine ", "mine5", "mine5 ", "mine10", "mine10 "] :
+#             if qry == "mine" or qry == "mine10" or qry == "mine15" :
+                  filename2 = "/home/pi/ioreth/ioreth/ioreth/lastforme"
+                  if not args == "" or not args == " " :
+                     callsigns = args.split(' ', 1)[0].upper()
+                     cmd1 = "cat /home/pi/ioreth/ioreth/ioreth/archive/index.html | grep -i \"" + callsigns + ":\" -a --text >/home/pi/ioreth/ioreth/ioreth/lastforme"
+                     cmd2 = "; cat /home/pi/ioreth/ioreth/ioreth/netlog-msg | grep -i \"" + callsigns + ":\" -a --text >>/home/pi/ioreth/ioreth/ioreth/lastforme"
+                     cmd = cmd1 + cmd2
+                  if args.upper() == "THURS" or args.upper() == "THURSDAY" or args.upper() == "APRSTHURSDAY" or args.upper() == "#APRSTHURSDAY" :
+#                     filename2 = "/home/pi/ioreth/ioreth/ioreth/aprsthursday/index.html"
+                     callsigns = sourcetrunc.upper()
+                     cmd1 = "cat /home/pi/ioreth/ioreth/ioreth/aprsthursday/archives/index.html | grep -i \"" + callsigns + ":\" -a --text >/home/pi/ioreth/ioreth/ioreth/lastforme"
+                     cmd2 = " ; cat /home/pi/ioreth/ioreth/ioreth/aprsthursday/index.html | grep -i \"" + callsigns + ":\" -a --text >>/home/pi/ioreth/ioreth/ioreth/lastforme"
+                     cmd = cmd1 + cmd2
+#                  else:
+                  if args == "" or args == " " :
+                     callsigns = sourcetrunc.upper()
+                     cmd1 = "cat /home/pi/ioreth/ioreth/ioreth/archive/index.html | grep -i \"" + callsigns + ":\" -a --text >/home/pi/ioreth/ioreth/ioreth/lastforme"
+                     cmd2 = "; cat /home/pi/ioreth/ioreth/ioreth/netlog-msg | grep -i \"" + callsigns + ":\" -a --text >>/home/pi/ioreth/ioreth/ioreth/lastforme"
+                     cmd = cmd1 + cmd2
+                  os.system(cmd)
+
+
+             elif qry == "search" or qry == "search10" or qry == "search15" :
+                  filename2 = "/home/pi/ioreth/ioreth/ioreth/search"
+                  timestrtxt = time.strftime("%m%d")
+                  if args == "" :
+#                                                     1234567890123456789012345678901234567890123456789012345678901234567
+                     self.send_aprs_msg(sourcetrunc, timestrtxt + " ERROR:Include a search string after SEARCH." )
+                     return
+                  else:
+                     cmd1 = "cat /home/pi/ioreth/ioreth/ioreth/archive/index.html | grep -i \"" + args + "\" -a --text >/home/pi/ioreth/ioreth/ioreth/search"
+                     cmd2 = "; cat /home/pi/ioreth/ioreth/ioreth/netlog-msg | grep -i \"" + args + "\" -a --text >>/home/pi/ioreth/ioreth/ioreth/search"
+                     cmd = cmd1 + cmd2
+                     os.system(cmd)
+             elif args.upper() in ["THURS", "THURS ", "THURSDAY", "THURSDAY ", "APRSTHURSDAY", "APRSTHURSDAY ", "#APRSTHURSDAY", "#APRSTHURSDAY "] :
+                  filename2 = "home/pi/ioreth/ioreth/ioreth/aprsthursday/index.html"
+             else: 
+                  filename2 = "home/pi/ioreth/ioreth/ioreth/netlog-msg"
              with open(filename2) as netlast:
                   lasts = netlast.readlines()
                   lastlines = lasts[-5:]
+                  if qry == "last10" or qry == "log10" or qry == "mine10" or qry == "search10" : 
+                        lastlines = lasts[-10:]
+                  if qry == "last15" or qry == "log15" or qry == "mine15" or qry == "search15" : 
+                        lastlines = lasts[-15:]
                   netlast.close()
-#                                             1234567890123456789012345678901234567890123456789012345678901234567
-             self.send_aprs_msg(sourcetrunc, "CQ[space]msg reply,LIST for recipients,HELP cmds. Info:aprsph.net" )
+#                                                  1234567890123456789012345678901234567890123456789012345678901234567
+             if qry == "mine" or qry == "mine10" or qry == "mine15" :
+                  timestrtxt = time.strftime("%m%d %H%MZ")
+                  if len(lastlines) < 1 :
+                       self.send_aprs_msg(sourcetrunc, timestrtxt +":No results for " + callsigns + ". Try a different one or HELP." )
+#                  elif args.upper() == "THURS" or args.upper() == "THURSDAY" or args.upper() == "APRSTHURSDAY" or args.upper() == "#APRSTHURSDAY" :
+                  elif args.upper() in ["THURS", "THURS ", "THURSDAY", "THURSDAY ", "APRSTHURSDAY", "APRSTHURSDAY ", "#APRSTHURSDAY", "#APRSTHURSDAY "] :
+
+                       self.send_aprs_msg(sourcetrunc, "Last #APRSThursday msgs from " + callsigns + " retrieved " + timestrtxt )
+                  else: 
+                       self.send_aprs_msg(sourcetrunc, "Last NET/CQ messages by " + callsigns + ". More info: aprsph.net" )
+             if qry == "search" or qry == "search10" or qry == "search15" :
+                  timestrtxt = time.strftime("%m%d %H%MZ")
+                  if len(lastlines) < 1 :
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + ":No results for " + args +"." )
+                  else: 
+                       self.send_aprs_msg(sourcetrunc, timestrtxt + ":Msgs with \"" + args + "\"" )
+# CQ[space]msg reply,LIST for recipients,HELP cmds. Info:aprsph.net" )
+             if args.upper() in ["THURS", "THURS ", "THURSDAY", "THURSDAY ", "APRSTHURSDAY", "APRSTHURSDAY ", "#APRSTHURSDAY", "#APRSTHURSDAY "] :
+                if qry in ["laast", "last10", "last15"]  :
+#                                                  1234567890123456789012345678901234567890123456789012345678901234567
+                  timestrtxt = time.strftime("%m%d %H%MZ")
+                  self.send_aprs_msg(sourcetrunc, "Last #APRSThursday messages. Info: https://aprsph.net " + timestrtxt )
+             else :
+                  self.send_aprs_msg(sourcetrunc, "CQ[spc]msg reply,LIST recipients,HELP cmds.Info:aprsph.net " + timestrtxt )
+
              count = 0
              for line in lastlines:
                   count += 1
                   strcount = str(count)
-                  msgbody = str(count) + "." + line[24:]
-                  if len(msgbody) > 67 :
+                  msgdate = line[5:11]
+                  msgtime = line[11:16].replace(':','') + "Z "
+                  msgcontent = line[24:]
+                  msgbody = msgdate + msgtime + msgcontent
+                  msgbodywithcount = strcount + "."  + msgbody
+                  if len(msgbodywithcount) > 67 :
                        msgbody1 = msgbody[0:61]
                        msgbody2 = msgbody[61:]
-                       self.send_aprs_msg(sourcetrunc, msgbody1 + "+" )
+                       self.send_aprs_msg(sourcetrunc, strcount + "." + msgbody1 + "+" )
                        self.send_aprs_msg(sourcetrunc, strcount + ".+" + msgbody2 )
                   else:
-                       self.send_aprs_msg(sourcetrunc, msgbody )
-
-#                  if len(msgbody) < 67
-#                     self.send_aprs_msg(sourcetrunc, msgbody)
-#                  else:
-#                     self.send_aprs_msg(sourcetrunc, msgbody[0:67])
-#                     self.send_aprs_msg(sourcetrunc, msgbody)
-
-#                  self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
-             logger.info("Sending last 5 cqlog messages to  %s", sourcetrunc)
-
-        elif qry == "last10" or qry == "log10" : 
-             with open(filename2) as netlast:
-                  lasts = netlast.readlines()
-                  lastlines = lasts[-10:]
-                  netlast.close()
-#             self.send_aprs_msg(sourcetrunc, "CQ[space]msg to reply,LIST for QRX,HELP for cmds. Info: aprsph.net" )
-             self.send_aprs_msg(sourcetrunc, "CQ[space]msg reply,LIST for recipients,HELP cmds. Info:aprsph.net" )
-#             self.send_aprs_msg(sourcetrunc, "Last 10 mesgs. CQ[space]text to reply,LIST for QRX,HELP for cmds." )
-#             self.send_aprs_msg(sourcetrunc, "Last 10 CQ msgs sent. CQ +text to reply,LIST for QRX,HELP for cmds." )
-             count = 0
-             for line in lastlines:
-                  count += 1
-                  strcount = str(count)
-                  msgbody = str(count) + "." + line[24:]
-                  if len(msgbody) > 67 :
-                       msgbody1 = msgbody[0:61]
-                       msgbody2 = msgbody[61:]
-                       self.send_aprs_msg(sourcetrunc, msgbody1 + "+" )
-                       self.send_aprs_msg(sourcetrunc, strcount + ".+" + msgbody2 )
-                  else:
-                       self.send_aprs_msg(sourcetrunc, msgbody )
+                       self.send_aprs_msg(sourcetrunc, msgbodywithcount )
+             timestrtxt = time.strftime("%m%d %H%MZ")
+             self.send_aprs_msg(sourcetrunc, str(count) + " messages retrieved on " + timestrtxt + ". Info: https://aprsph.net" )
+             logger.info("Sending last %s messages to  %s", count, sourcetrunc)
 
 
-#                  self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
-             logger.info("Sending last 10 cqlog messages to  %s", sourcetrunc)
-
-        elif qry == "last15" or qry == "log15" : 
-             with open(filename2) as netlast:
-                  lasts = netlast.readlines()
-                  lastlines = lasts[-15:]
-                  netlast.close()
-             self.send_aprs_msg(sourcetrunc, "CQ[space]msg reply,LIST for recipients,HELP cmds. Info:aprsph.net" )
-#             self.send_aprs_msg(sourcetrunc, "CQ[space]msg to reply,LIST for QRX,HELP for cmds. Info: aprsph.net" )
-#             self.send_aprs_msg(sourcetrunc, "Last 15 mesgs. CQ[space]text to reply,LIST for QRX,HELP for cmds." )
-#             self.send_aprs_msg(sourcetrunc, "Last 10 CQ msgs sent. CQ +text to reply,LIST for QRX,HELP for cmds." )
-             count = 0
-             for line in lastlines:
-                  count += 1
-                  strcount = str(count)
-                  msgbody = str(count) + "." + line[24:]
-                  if len(msgbody) > 67 :
-                       msgbody1 = msgbody[0:61]
-                       msgbody2 = msgbody[61:]
-                       self.send_aprs_msg(sourcetrunc, msgbody1 + "+" )
-                       self.send_aprs_msg(sourcetrunc, strcount + ".+" + msgbody2 )
-                  else:
-                       self.send_aprs_msg(sourcetrunc, msgbody )
-
-
-
-#                  count += 1
-#                  self.send_aprs_msg(sourcetrunc, str(count) + "." + line[24:91] )
-             logger.info("Sending last 15 cqlog messages to  %s", sourcetrunc)
-
-
-# Let users set up SMS aliases. Be sure to create the paths yourself if not yet existent.
+# Let the user set up aliasses for their SMS contacts
         elif qry == "smsalias" or qry == "setalias":
              sourcetrunc = source.replace('*','')
              callnossid = sourcetrunc.split('-', 1)[0]
@@ -1051,16 +1299,20 @@ class BotAprsHandler(aprs.Handler):
 
              try:
 #                   os.system(sendsms)
-                   self.send_aprs_msg(sourcetrunc, "SMS " + smsoralias +" -sending. Note: APRS msgs not private." )
+                   self.send_aprs_msg(sourcetrunc, "SMS " + smsoralias + " " + args.split(' ')[1] + " " + args.split(' ')[2] +  "...-sending. Note: APRS msgs not private." )
                    aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + callnossid
                    smsoralias = args.split(' ', 1)[0]
                    if not os.path.isfile(aliasfile):
                          self.send_aprs_msg(sourcetrunc, "U may use alias.SMSALIAS 09XXXXXXXXX NAME to set.SMS NAME to send.")
                    logger.info("Replying to %s that SMS to %s is being sent", sourcetrunc, SMS_DESTINATION)
+# Let's restart the SMS modem first, because we've been encountering some issues with the modem.
+                   restartmodem = "/home/pi/gammu-restart.sh"
+                   os.system(restartmodem)
+# Now we queue the message.
                    os.system(sendsms)
                    logger.info("Sending SMS from %s to %s", sourcetrunc, SMS_DESTINATION)
              except:
-                   self.send_aprs_msg(sourcetrunc, 'SMS Could not be sent')
+                   self.send_aprs_msg(sourcetrunc, "SMS " + args.split(' ')[1] + " " +  args.split(' ')[2] + "... Could not be sent.")
                    logger.info("Could not send SMS from %s to %s", sourcetrunc, SMS_DESTINATION)
 
 # This is necessary, since APRS messages may be sent or received multiple times (e.g., heard from another digipeater)
@@ -1074,8 +1326,11 @@ class BotAprsHandler(aprs.Handler):
             self.send_aprs_msg(sourcetrunc, random_replies[qry] )
 
         else:
-#                                            1234567890123456789012345678901234567890123456789012345678901234567
-            self.send_aprs_msg(sourcetrunc, "ERROR:CQ[space]msg to join,LIST to view,HELP or aprsph.net for info" )
+            timestrtxt = time.strftime("%m%d %H%MZ")
+#                                                1234567890123456789012345678901234567890123456789012345678901234567
+            self.send_aprs_msg(sourcetrunc, timestrtxt + ":Command not found: " + qry.upper() )
+#                                                1234567890123456789012345678901234567890123456789012345678901234567
+            self.send_aprs_msg(sourcetrunc, timestrtxt + ":CQ [spc] msg to join,LIST,LAST. Info:HELP or aprsph.net" )
             dupecheck = qry + " " + args
             with open('/home/pi/ioreth/ioreth/ioreth/lastmsgdir/' + sourcetrunc, 'w') as g:
                 lasttext = args
@@ -1298,7 +1553,7 @@ class ReplyBot(AprsClient):
                                os.system(movespam)
                     else:
 # Let cell user create an alias
-  
+                      
                       if smsstartupper == "ALIAS":
                           cellaliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/CELLULAR"
                           isbodyalias = len(smsreceived.split())
@@ -1314,6 +1569,50 @@ class ReplyBot(AprsClient):
                           sendsms = ( "echo 'U have set ur own alias as " + cellownalias + ". Ur # will not appear on msgs. aprsph(.)net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           os.system(sendsms)
                           logger.info("Self-determined alias set for for %s as %s.", smsnumber, cellownalias )
+                      if smsstartupper == "SAT" :
+                         isbody = len(smsreceived.split())
+                         if isbody > 1 :
+                              smsbody = smsreceived.split(' ', 1)[1]
+                              logger.info("Message body found. Sending message")
+                         else:
+                              smsbody = "EMPTY MSG BODY"
+                              sendsms = ( "echo 'ERROR: Format is SAT ######## Message, where # are the 8-digit Thuraya number.  More info at aprsph dot net.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                              os.system(sendsms)
+                              logger.info("Message body not found. Replying to %s with error message.",smsnumber)
+                              return
+                         satargs = smsbody.replace('\"','')
+                         satargs2 = satargs.replace('\'','')
+                         satnumber = satargs2.split(' ',1)[0]
+                         satmesg = satargs2.split(' ',1)[1]
+                         satmesgtrunc = satmesg[0:138]
+                         if not len(satnumber) == 8 or not satnumber.isnumeric()  :
+                            logger.info("Error validating satellite message number from %s to %s:%s", smssender,satnumber,satmesgtrunc)
+                            sendsms = ( "echo 'ERROR: Include 8-digit Thuraya number after SAT. Example: SAT 44441212 Message here. Info at aprsph dot net' | gammu-smsd-inject TEXT 0" + smsnumber )
+                            os.system(sendsms)
+                            movecmd = ("sudo mv "+ smsinbox + filename + " /var/spool/gammu/processed")
+                            os.system(movecmd)
+                            logger.info("Cleaning up SMS inbox.")
+
+
+                            return
+                         sendsms = ( "echo 'Attempting to send satphone SMS to " + satnumber + " More info at aprsph dot net.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                         cmd = "curl -X POST https://sms.thuraya.com/sms.php -H \"Content-Type: application/x-www-form-urlencoded\" -d \"msisdn=" + satnumber + "&from=" + smssender + "&message=" + satmesgtrunc + " -via aprsph.net\""
+                         try:
+                            os.system(cmd)
+                            os.system(sendsms)
+                            logger.info("Attempting send satellite message from %s to %s:%s", smssender,satnumber,satmesgtrunc)
+                         except:
+                            sendsms = ( "echo 'Error sending satphone SMS to " + satnum+ ". Pls try again later. More info at aprsph dot net' | gammu-smsd-inject TEXT 0" + smsnumber )
+                            os.system(sendsms)
+                            logger.info("Error sending satellite message from %s to %s:%s", smssender,satnumber,satmesgtrunc)
+#                         return
+# Let's restart the SMS modem first, because we've been encountering some issues with the modem.
+                         restartmodem = "/home/pi/gammu-restart.sh"
+                         os.system(restartmodem)
+                         movecmd = ("sudo mv "+ smsinbox + filename + " /var/spool/gammu/processed")
+                         os.system(movecmd)
+                         logger.info("Cleaning up SMS inbox.")
+
 
 
                       elif smsreceived[0:1] == "@":
@@ -1395,9 +1694,9 @@ class ReplyBot(AprsClient):
                                self._aprs.send_aprs_msg(callsign[1:], "SMS " + smssender + " Message to send/reply to PH SMS.")
                                logger.info("SMS is in correct format. Sending to %s.", callsign)
                           if smsalias == 1 or cellsmsalias == 1:
-                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. aprsph . net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " has been sent. APRS msgs not private, but ur # has an alias & will not appear. APRSPH(dot)net for info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           else:
-                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " sent. Ur # & msg may appear on online services. Send ALIAS yourname to set an alias. Go aprsph.net for more info.' | gammu-smsd-inject TEXT 0" + smsnumber )
+                               sendsms = ( "echo 'APRS msg to " + callsign[1:] + " sent. Ur # & msg may appear on online services. Send ALIAS yourname to set an alias. Go aprsph(dot)net for info.' | gammu-smsd-inject TEXT 0" + smsnumber )
                           logger.info("Sending %s a confirmation message that APRS message has been sent.", smssender)
                           os.system(sendsms)
                       else:
@@ -1512,6 +1811,14 @@ class ReplyBot(AprsClient):
               logger.info("Uploading aprsthursday logfile to the web")
            except:
               logger.info("ERRIR in uploading logfile to the web")
+
+
+
+
+
+
+
+
 
 
 
