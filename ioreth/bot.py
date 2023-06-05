@@ -662,7 +662,7 @@ class BotAprsHandler(aprs.Handler):
                   logger.info("Message is exact duplicate, stop logging" )
                   return
 
-           if not len(satnum) == 8 or not satnum.isnumeric()  :
+           if not len(satnum) == 8 or satnum.isnumeric() == False  :
                logger.info("Error validating satellite message number from %s to %s", sourcetrunc,satnum)
 #                                              1234          567890123456789012345678901 234567890123456789012345678901234567
                self.send_aprs_msg(sourcetrunc, timestrtxt + " ERROR:Use 8-digit Thuraya \# after SAT. Example:SAT 44441234. " )
@@ -1190,7 +1190,7 @@ class BotAprsHandler(aprs.Handler):
              if args == open(aliasscratch).read():
                  logger.info("Already processed alias for %s %s recently. No longer processing.", SMS_DESTINATION, SMS_ALIAS)
                  return
-             if not args[0:2] == "09" and not SMS_DESTINATION.isnumeric() :
+             if not args[0:2] == "09" or SMS_DESTINATION.isnumeric() == False :
                  self.send_aprs_msg(sourcetrunc, "SMSALIAS 09XXXXXXXXX name to set. SMS NAME to send thereafter.")
                  return
              if not os.path.isfile(aliasscratch):
@@ -1292,7 +1292,7 @@ class BotAprsHandler(aprs.Handler):
 
 # Validating the destination. In the Philippines, cell numbers start with 09XX. Adjust this accordingly.
 
-             if not SMS_DESTINATION[0:2] == "09" and not SMS_DESTINATION.isnumeric() :
+             if not SMS_DESTINATION[0:2] == "09" or SMS_DESTINATION.isnumeric() == False :
                  self.send_aprs_msg(sourcetrunc, "Num or SMSALIAS invalid. Usage:SMS 09XXXXXXXXX or alias msg. PH# only" )
                  logger.info("Replying to %s that %s is not a valid number.", sourcetrunc, SMS_DESTINATION)
                  return
@@ -1585,7 +1585,7 @@ class ReplyBot(AprsClient):
                          satnumber = satargs2.split(' ',1)[0]
                          satmesg = satargs2.split(' ',1)[1]
                          satmesgtrunc = satmesg[0:138]
-                         if not len(satnumber) == 8 or not satnumber.isnumeric()  :
+                         if not len(satnumber) == 8 or satnumber.isnumeric() == False :
                             logger.info("Error validating satellite message number from %s to %s:%s", smssender,satnumber,satmesgtrunc)
                             sendsms = ( "echo 'ERROR: Include 8-digit Thuraya number after SAT. Example: SAT 44441212 Message here. Info at aprsph dot net' | gammu-smsd-inject TEXT 0" + smsnumber )
                             os.system(sendsms)
