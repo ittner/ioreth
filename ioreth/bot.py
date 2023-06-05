@@ -1181,7 +1181,7 @@ class BotAprsHandler(aprs.Handler):
              sourcetrunc = source.replace('*','')
              callnossid = sourcetrunc.split('-', 1)[0]
              SMS_DESTINATION = args[0:11]
-             SMS_ALIAS = args[12:]
+             SMS_ALIAS = args[12:].replace(' ','')
              aliasscratch = "/home/pi/ioreth/ioreth/ioreth/smsaliasscratch/" + callnossid
              aliasfile = "/home/pi/ioreth/ioreth/ioreth/smsalias/" + callnossid
 # stop processing duplicates, since APRS sends messages multiple times.
@@ -1190,7 +1190,7 @@ class BotAprsHandler(aprs.Handler):
              if args == open(aliasscratch).read():
                  logger.info("Already processed alias for %s %s recently. No longer processing.", SMS_DESTINATION, SMS_ALIAS)
                  return
-             if not args[0:2] == "09":
+             if not args[0:2] == "09" and not SMS_DESTINATION.isnumeric() :
                  self.send_aprs_msg(sourcetrunc, "SMSALIAS 09XXXXXXXXX name to set. SMS NAME to send thereafter.")
                  return
              if not os.path.isfile(aliasscratch):
@@ -1292,7 +1292,7 @@ class BotAprsHandler(aprs.Handler):
 
 # Validating the destination. In the Philippines, cell numbers start with 09XX. Adjust this accordingly.
 
-             if not SMS_DESTINATION[0:2] == "09":
+             if not SMS_DESTINATION[0:2] == "09" and not SMS_DESTINATION.isnumeric() :
                  self.send_aprs_msg(sourcetrunc, "Num or SMSALIAS invalid. Usage:SMS 09XXXXXXXXX or alias msg. PH# only" )
                  logger.info("Replying to %s that %s is not a valid number.", sourcetrunc, SMS_DESTINATION)
                  return
